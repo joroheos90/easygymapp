@@ -1,0 +1,51 @@
+# --- Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+.build/
+
+# --- Entornos virtuales
+venv/
+.venv/
+env/
+ENV/
+pip-wheel-metadata/
+
+# --- Django
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+static_root/
+.collectstatic/
+
+# Archivos de configuración/secretos
+.env
+*.env
+.env.*         # .env.local, etc.
+*.ini
+*.cfg
+
+# --- Logs / caches
+*.log
+logs/
+.cache/
+.coverage*
+htmlcov/
+pytest_cache/
+
+# --- IDEs/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Node (si usas tooling frontend)
+node_modules/
+*.map
+dist/
+build/
