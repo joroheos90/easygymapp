@@ -1,0 +1,62 @@
+{% extends "app/base.html" %}
+{% block title %}{{ is_edit|yesno:"Editar Usuario,Nuevo Usuario" }}{% endblock %}
+{% block headerTitle %}Perfil{% endblock %}
+
+{% block headerButtons %}
+<a href="{% if is_edit %}{% url 'app.profile' %}?userid={{ userid }}{% else %}{% url 'app.profile' %}{% endif %}"
+   class="cursor-pointer text-lg font-normal text-blue-500">Cancelar</a>
+<button form="user-form" class="cursor-pointer text-lg font-bold text-blue-500">Guardar</button>
+{% endblock %}
+
+{% block content %}
+<form id="user-form" method="post" class="flex flex-col gap-6 px-4 py-4 pb-6 font-roboto">
+  {% csrf_token %}
+
+  <div class="mx-auto h-[140px] w-[140px] rounded-full">
+    <img src="https://avatar.iran.liara.run/public" alt="" height="150" width="150" />
+  </div>
+
+  <div class="flex flex-col gap-4">
+    <div class="flex flex-col rounded-[8px] bg-white px-4">
+      <input
+        type="text" name="first_name" value="{{ first_name }}"
+        class="w-full border-b border-gray-300 px-1 py-3 text-base font-normal capitalize ring-0 focus:ring-0 focus:outline-none"
+        placeholder="Nombre" autocomplete="off" />
+      <input
+        type="text" name="last_name" value="{{ last_name }}"
+        class="w-full px-1 py-3 text-base font-normal capitalize ring-0 focus:ring-0 focus:outline-none"
+        placeholder="Apellidos" autocomplete="off" />
+    </div>
+
+    <div class="flex flex-col rounded-[8px] bg-white px-4">
+      <input
+        type="text" name="phone" value="{{ phone }}"
+        class="w-full appearance-none border-b border-gray-300 px-1 py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+        placeholder="Teléfono" autocomplete="tel" />
+      <input
+        type="date" name="birth_date" value="{{ birth_date }}"
+        class="w-full px-1 py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+        placeholder="Fecha de nacimiento" />
+    </div>
+
+    <div class="flex flex-col rounded-[8px] bg-white px-4">
+      <input
+        type="number" step="1" min="0" name="height_cm" value="{{ height_cm }}"
+        class="w-full appearance-none border-b border-gray-300 px-1 py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+        placeholder="Estatura en centímetros (opcional)" />
+      <input
+        type="number" step="0.1" min="0" name="weight_kg"
+        class="w-full appearance-none px-1 py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+        placeholder="Peso actual (opcional)" />
+    </div>
+  </div>
+</form>
+
+{% if is_edit %}
+<form method="post" class="flex flex-col rounded-[8px] bg-white px-4 py-2 mt-4">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="delete" />
+  <button class="cursor-pointer font-normal text-red-500 text-left">Borrar Cliente</button>
+</form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,157 @@
+{% extends "app/base.html" %} {% block title %}Horarios{% endblock %} {% block headerTitle %}Horarios{% endblock %}
+{% block headerButtons %}
+<a href="{% url 'app.home' %}" class="cursor-pointer text-lg font-normal">
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="size-6"
+    >
+        <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M15.75 19.5 8.25 12l7.5-7.5"
+        />
+    </svg>
+</a>
+{% endblock %} {% block content %}
+<div class="p-4 font-roboto">
+    <div class="flex flex-col gap-4 rounded-[24px] bg-white">
+        <div class="flex flex-col gap-4 p-4">
+            <h1 class="text-base font-medium">
+                Selecciona tu horario para mañana (martes, 14 de
+                febrero)
+            </h1>
+            <div class="flex flex-col gap-4">
+                <label class="flex cursor-pointer flex-row gap-2">
+                    <div
+                        class="relative flex w-fit items-center justify-center"
+                    >
+                        <input
+                            id="1"
+                            name="hour"
+                            type="radio"
+                            class="peer h-6 w-6 appearance-none rounded-full border border-black bg-white checked:bg-green-500"
+                        />
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.5"
+                            stroke="currentColor"
+                            class="absolute hidden size-4 peer-checked:flex"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="m4.5 12.75 6 6 9-13.5"
+                            />
+                        </svg>
+                    </div>
+                    <div class="flex w-full flex-col gap-2">
+                        <span class="text-sm font-medium"
+                            >6:00 AM a 7:00 AM</span
+                        >
+                        <div
+                            class="h-2 w-full rounded-full bg-gray-300"
+                        >
+                            <div
+                                style="width: 0%"
+                                class="h-full rounded-full bg-green-500"
+                            ></div>
+                        </div>
+                    </div>
+                </label>
+                <label class="flex cursor-pointer flex-row gap-2">
+                    <div
+                        class="relative flex w-fit items-center justify-center"
+                    >
+                        <input
+                            id="2"
+                            name="hour"
+                            type="radio"
+                            class="peer h-6 w-6 appearance-none rounded-full border border-black bg-white checked:bg-green-500"
+                        />
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.5"
+                            stroke="currentColor"
+                            class="absolute hidden size-4 peer-checked:flex"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="m4.5 12.75 6 6 9-13.5"
+                            />
+                        </svg>
+                    </div>
+                    <div class="flex w-full flex-col gap-2">
+                        <span class="text-sm font-medium"
+                            >6:00 AM a 7:00 AM</span
+                        >
+                        <div
+                            class="h-2 w-full rounded-full bg-gray-300"
+                        >
+                            <div
+                                class="h-full w-1/2 rounded-full bg-green-500"
+                            ></div>
+                        </div>
+                    </div>
+                </label>
+                <label class="flex cursor-pointer flex-row gap-2">
+                    <div
+                        class="relative flex w-fit items-center justify-center"
+                    >
+                        <input
+                            id="3"
+                            name="hour"
+                            type="radio"
+                            class="peer h-6 w-6 appearance-none rounded-full border border-black bg-white checked:bg-green-500"
+                        />
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.5"
+                            stroke="currentColor"
+                            class="absolute hidden size-4 peer-checked:flex"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="m4.5 12.75 6 6 9-13.5"
+                            />
+                        </svg>
+                    </div>
+                    <div class="flex w-full flex-col gap-2">
+                        <span class="text-sm font-medium"
+                            >6:00 AM a 7:00 AM</span
+                        >
+                        <div
+                            class="h-2 w-full rounded-full bg-gray-300"
+                        >
+                            <div
+                                style="width: 100%"
+                                class="h-full rounded-full bg-red-500"
+                            ></div>
+                        </div>
+                    </div>
+                </label>
+            </div>
+        </div>
+        <div
+            class="flex justify-center border-t border-gray-300 py-2.5"
+        >
+            <a href="{% url 'app.hours' %}"
+                class="cursor-pointer text-sm font-normal text-blue-500"
+            >
+                Ver Horarios
+    </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

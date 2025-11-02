@@ -1,0 +1,103 @@
+{% extends "app/base.html" %} {% block title %}Horarios{% endblock %} {% block headerTitle %}Horarios{% endblock %}
+{% block headerButtons %}
+<a href="{% url 'app.selector' %}" class="cursor-pointer text-lg font-normal">
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="size-6"
+    >
+        <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M15.75 19.5 8.25 12l7.5-7.5"
+        />
+    </svg>
+</a>
+{% endblock %} {% block content %}
+<div class="flex flex-col gap-6 p-4 py-6 font-roboto">
+    <h1 class="mx-auto text-xl font-semibold">{{date}}</h1>
+    <div class="flex flex-col gap-5">
+        {% for hour in hours %}
+        <div class="flex flex-col gap-4 rounded-[24px] bg-white p-4">
+            <div
+                class="flex flex-row items-center justify-between border-b border-gray-300 py-2"
+            >
+                <span class="text-base uppercase font-bold"
+                    >{{hour.title}}</span
+                >
+                <span
+                    class="flex items-center gap-1 text-base font-medium 
+                    {% if hour.enrolled == 0 %} text-gray-600 
+                    {% elif hour.enrolled == hour.capacity %} text-red-600
+                    {% else %} text-green-600 {% endif %}"
+                    >{{hour.enrolled}}
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke-width="1.5"
+                        stroke="currentColor"
+                        class="size-5"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"
+                        />
+                    </svg>
+                </span>
+            </div>
+            <div class="flex flex-col gap-2">
+                {% for user in hour.users %}
+                <a href="{% url 'app.profile' %}?userid={{user.id}}"
+                    class="flex cursor-pointer flex-row items-center justify-between gap-2"
+                >
+                    <div
+                        class="flex h-9 min-h-9 w-9 min-w-9 items-center justify-center rounded-full border border-gray-300 bg-blue-400"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.5"
+                            stroke="currentColor"
+                            class="size-4"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
+                            />
+                        </svg>
+                    </div>
+                    <div
+                        class="flex w-full flex-row items-center justify-between border-b border-gray-300 py-2"
+                    >
+                        <div class="flex flex-col">
+                            <span class="text-base font-medium"
+                                >{{user.full_name}}</span
+                            >
+                            <span class="text-xs text-gray-500"
+                                >{{user.phone}}</span
+                            >
+                        </div>
+                        <div class="flex flex-row gap-1">
+                            <span class="text-xs text-gray-500"
+                                >{{user.signed_at.day}}</span
+                            >
+                            <span class="text-xs text-black"
+                                >{{user.signed_at.time}}</span
+                            >
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
