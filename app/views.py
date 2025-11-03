@@ -12,7 +12,8 @@ from django.utils.dateparse import parse_date
 from django.http import HttpResponseBadRequest
 from app.models import GymUser
 from datetime import date
-from .models import DailyTimeslot, GymUser, UserWeight
+from .models import DailyTimeslot, GymUser, UserWeight, Payment
+from dateutil.relativedelta import relativedelta
 
 def index(request):
     return render(request, "app/home.html")
@@ -22,8 +23,53 @@ def selector(request):
     return render(request, "app/hourselection.html")
 
 
-def _amount_from_cents(cents: int | None) -> float:
-    return (cents or 0) / 100.0
+def _current_period_for(user: GymUser, ref: date | None = None) -> tuple[date, date]:
+    """
+    Monthly period anchored to the user's join_date.day.
+    Returns (start, end) where end is exclusive.
+    """
+    today = ref or timezone.localdate()
+    anchor_day = user.join_date.day
+    if today.day < anchor_day:
+        # period started last month on anchor_day
+        start = (today.replace(day=1) - relativedelta(months=1)).replace(day=anchor_day)
+    else:
+        start = today.replace(day=anchor_day)
+    end = start + relativedelta(months=1)
+    return start, end
+
+
+def users(request):
+    """
+    /users/?filter=all|delinquent|overdue
+    - all:      all active users
+    - delinquent/overdue: only those who have NOT paid their current period
+    Context -> {"users": [{"full_name": ..., "phone": ..., "paid_current_period": bool}, ...]}
+    """
+    filt = (request.GET.get("filter") or "all").strip().lower()
+    today = timezone.localdate()
+
+    # Base queryset: active users (ajusta si quieres incluir inactivos)
+    qs = GymUser.objects.filter(is_active=True).only("id", "full_name", "phone", "join_date").order_by("full_name")
+
+    out = []
+    for u in qs:
+        ps, pe = _current_period_for(u, ref=today)
+        paid = Payment.objects.filter(user=u, period_start__lte=ps, period_end__gte=pe).exists()
+        record = {
+            "id": u.id,
+            "full_name": u.full_name,
+            "phone": getattr(u, "phone", None),
+            "paid_current_period": paid,
+        }
+        if filt in ("delinquent", "overdue"):
+            if not paid:
+                out.append(record)
+        else:  # "all" or anything else
+            out.append(record)
+
+    return render(request, "app/users.html", {"users": out, "filter": filt})
+
 
 def profile(request):
     """
@@ -113,14 +159,6 @@ def hours(request):
 
 
 def edit(request):
-    """
-    Crea o actualiza un usuario:
-      - GET  /profile/edit/?userid=123   -> edita
-      - GET  /profile/edit/              -> nuevo
-      - POST /profile/edit/?userid=123   -> guarda edición
-      - POST /profile/edit/              -> guarda nuevo
-      - POST con action=delete y userid  -> borra
-    """
     raw = request.GET.get("userid")
     user = None
     if raw:
@@ -131,14 +169,12 @@ def edit(request):
         user = get_object_or_404(GymUser, pk=user_id)
 
     if request.method == "POST":
-        # ¿Borrar?
         if request.POST.get("action") == "delete":
             if not user:
                 return HttpResponseBadRequest("No puedes borrar: usuario no encontrado")
             user.delete()
-            return redirect("app.profile")  # ajusta a donde quieras volver
+            return redirect("app.hours")
 
-        # Crear/actualizar
         first_name = (request.POST.get("first_name") or "").strip()
         last_name  = (request.POST.get("last_name") or "").strip()
         full_name  = (first_name + " " + last_name).strip() or "Sin nombre"
