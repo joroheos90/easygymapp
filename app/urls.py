@@ -10,4 +10,5 @@ urlpatterns = [
     path("edit", views.edit, name="app.edit"),
     path("payment", views.payment, name="app.payment"),
     path("users", views.users, name="app.users"),
+    path("payments", views.payments, name="app.payments"),
 ]

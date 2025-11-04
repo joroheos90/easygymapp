@@ -269,9 +269,9 @@ def edit(request):
     return render(request, "app/editprofile.html", ctx)
 
 METHOD_CHOICES = [
-    ("CASH", "Efectivo"),
-    ("TRANSFER", "Transferencia"),
-    ("SINPE", "SINPE"),
+    ("efectivo", "Efectivo"),
+    ("transferencia", "Transferencia"),
+    ("sinpe", "SINPE"),
 ]
 
 MONTHS_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
@@ -317,11 +317,11 @@ def payment(request):
     """
     GET:
       - Nuevo: /pago/
-      - Editar: /pago/?pagoid=<id>
+      - Editar: /pago/?paymentid=<id>
     POST:
       - Crea o actualiza y redirige a home (si edit, añade ?pagoid=)
     """
-    pagoid = request.GET.get("pagoid") or request.POST.get("pagoid")
+    pagoid = request.GET.get("paymentid") or request.POST.get("paymentid")
     pref_user_id = request.GET.get("userid") or request.POST.get("userid")
 
     is_edit = bool(pagoid)
@@ -382,7 +382,10 @@ def payment(request):
             p.period_label = period_label
             p.notes = notes
             p.save()
-            return redirect("app.home")
+            if pref_user_id:
+                return redirect(f"{reverse('app.payments')}?userid={pref_user_id}")
+            else:
+                return redirect("app.home")
         else:
             p = Payment.objects.create(
                 user=user,
@@ -395,7 +398,7 @@ def payment(request):
                 notes=notes,
             )
             if pref_user_id:
-                return redirect(f"{reverse('app.profile')}?userid={pref_user_id}")
+                return redirect(f"{reverse('app.payments')}?userid={pref_user_id}")
             else:
                 return redirect("app.home")
 
@@ -418,7 +421,7 @@ def _pago_context(is_edit: bool, pagoid: str | None, payment: Payment | None, pr
             "user_id": payment.user_id,
             "amount": payment.amount,
             "method": payment.method,
-            "paid_at": payment.paid_at.isoformat() if hasattr(payment.paid_at, "isoformat") else "",
+            "paid_at": payment.paid_at.date().isoformat() if hasattr(payment.paid_at, "isoformat") else "",
             "period": f"{ps.year:04d}-{ps.month:02d}",
             "notes": payment.notes or "",
         }
@@ -433,10 +436,89 @@ def _pago_context(is_edit: bool, pagoid: str | None, payment: Payment | None, pr
     return {
         "is_edit": is_edit,
         "user_id": pref_user_id,
-        "pagoid": pagoid,
+        "payment_id": pagoid,
         "users": users,
         "methods": methods,
         "periods": periods,
         "initial": initial,
     }
+
+def payments(request):
+    """
+    /pagos/?filter=all
+             |period&period=YYYY-MM
+             |last_3
+             |last_7
+             [&userid=<id>]
+
+    - all          : todos los pagos (por defecto)
+    - period       : pagos cuyo periodo (period_start) coincide con YYYY-MM
+    - last_3       : pagos en los últimos 3 días (incluye hoy)
+    - last_7       : pagos en los últimos 7 días (incluye hoy)
+    - userid       : limita a los pagos de ese usuario
+
+    Context -> {"payments": [{"full_name", "paid_at_label"}], "filter": <str>}
+    """
+    filt = (request.GET.get("filter") or "all").strip().lower()
+    userid = request.GET.get("userid")
+    period_str = request.GET.get("period")  # "YYYY-MM" cuando filter=period
+
+    today = timezone.localdate()
+
+    # Base queryset
+    qs = (
+        Payment.objects
+        .select_related("user")
+        .only("id", "paid_at", "period_start", "period_end", "period_label", "method", "amount", "user__id", "user__full_name")
+    )
+
+    if userid:
+        try:
+            uid = int(userid)
+            qs = qs.filter(user_id=uid)
+        except (TypeError, ValueError):
+            pass  # si viene mal, simplemente no filtra por usuario
+
+    if filt == "period" and period_str:
+        try:
+            y, m = map(int, period_str.split("-"))
+            qs = qs.filter(period_start__year=y, period_start__month=m)
+        except Exception:
+            # si el periodo viene mal, no aplica filtro adicional
+            pass
+    elif filt == "last_3":
+        since = today - timedelta(days=3)
+        qs = qs.filter(paid_at__date__gte=since)
+    elif filt == "last_7":
+        since = today - timedelta(days=7)
+        qs = qs.filter(paid_at__date__gte=since)
+    else:
+        # "all" u otros -> sin filtro extra
+        pass
+
+    qs = qs.order_by("-paid_at", "-id")
+
+    # Adaptamos al formato que tu template espera:
+    #   <span class="text-base font-medium">{{ full_name }}</span>
+    #   <span class="text-xs text-gray-500">{{ paid_at_label }}</span>
+    out = []
+    for p in qs:
+        full_name = p.user.full_name if p.user_id else "—"
+        paid_date = p.paid_at.date() if hasattr(p.paid_at, "date") else p.paid_at
+        out.append({
+            "id": p.id,
+            "full_name": full_name,
+            "paid_at_label": format_es_date(paid_date, include_year=True),
+            "period_label": p.period_label,
+            "method": p.get_method_display(),
+            "amount": p.amount,
+
+        })
+
+    return render(request, "app/payments.html", {
+        "payments": out,
+        "filter": filt,
+        "period": period_str or "",
+        "user_id": userid or "",
+    })
 

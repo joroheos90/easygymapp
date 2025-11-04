@@ -2,7 +2,7 @@
 {{is_edit|yesno:"Editar Pago,Nuevo Pago" }}{% endblock %} 
 {% block headerTitle %}Pago{% endblock %} {% block headerButtons %}
 <a
-    href="{% if user_id %}{% url 'app.profile' %}?userid={{ user_id }}{% else %}{% url 'app.home' %}{% endif %}"
+    href="{% if user_id %}{% url 'app.profile' %}?userid={{ user_id }}{% elif payment_id %}{% url 'app.payments' %}{% else %}{% url 'app.home' %}{% endif %}"
     class="cursor-pointer text-lg font-normal text-blue-500"
     >Cancelar</a
 >
@@ -26,11 +26,11 @@
             <select
                 name="user"
                 style="padding-top: 12px; padding-bottom: 12px;"
-                class="w-full py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+                class="w-full capitalize py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
             >
                 <option value="">Miembro</option>
                 {% for u in users %}
-                    <option value="{{ u.id }}" {% if initial.user_id == u.id %}selected{% endif %}>{{ u.full_name }}</option>
+                    <option class="capitalize" value="{{ u.id }}" {% if initial.user_id == u.id %}selected{% endif %}>{{ u.full_name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -41,6 +41,7 @@
                     type="text"
                     name="amount"
                     inputmode="numeric"
+                    value="{{initial.amount}}"
                     pattern="[0-9]*"
                     class="w-full px-1 py-3 text-right text-base font-normal tracking-widest ring-0 focus:ring-0 focus:outline-none"
                     placeholder="Monto"
@@ -64,6 +65,7 @@
                 <input
                     type="date"
                     name="paid_at"
+                    style="padding-left: 44px;"
                     value="{{ initial.paid_at }}"
                     class="w-full py-3 pl-11 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
                 />

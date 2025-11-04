@@ -1,0 +1,92 @@
+{% extends "app/base.html" %} {% load customfilters %} 
+{% load humanize %}
+{% block title %}Pagos{% endblock %} {% block headerTitle %}Pagos{% endblock %} {% block headerButtons %}
+<a  href="{% if user_id %}{% url 'app.profile' %}?userid={{ user_id }}{% else %}{% url 'app.home' %}{% endif %}"
+   
+
+class="cursor-pointer text-lg font-normal">
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="size-6"
+    >
+        <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M15.75 19.5 8.25 12l7.5-7.5"
+        />
+    </svg>
+</a>
+<a
+    href="{% url 'app.payment' %}{% if user_id %}?userid={{user_id}}{% endif %}"
+    class="cursor-pointer text-lg font-bold text-blue-500"
+    >Agregar</a
+>
+{% endblock %} {% block content %}
+<div class="font-roboto flex flex-col gap-6 px-4 py-6">
+    <div class="relative w-full">
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+            stroke="currentColor"
+            class="absolute top-3 left-2 size-5 text-gray-400"
+        >
+            <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+            />
+        </svg>
+
+        <input
+            type="text"
+            class="h-[40px] w-full rounded-[8px] bg-gray-50 px-8 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+            placeholder="Buscar cliente por nombre o telefono"
+        />
+    </div>
+    <div class="flex w-full flex-row gap-2 overflow-x-auto">
+        <div
+            class="h-6 cursor-pointer rounded-full border px-2 text-sm font-bold text-gray-500"
+        >
+            Todos
+        </div>
+        <div
+            class="h-6 cursor-pointer rounded-full border bg-green-200 px-2 text-sm font-bold text-green-800"
+        >
+            Morosos
+        </div>
+        <div
+            class="h-6 cursor-pointer rounded-full border px-2 text-sm font-bold text-gray-500"
+        >
+            Favoritos
+        </div>
+        <div
+            class="h-6 cursor-pointer rounded-full border px-2 text-sm font-bold text-gray-500"
+        >
+            Favoritos
+        </div>
+    </div>
+    <div class="flex flex-col gap-2">
+        {% for payment in payments %}
+            <a href="{% url 'app.payment' %}?paymentid={{payment.id}}" class="flex w-full cursor-pointer flex-row items-center justify-between border-b border-gray-400 py-2">
+                <div class="flex w-2/4 flex-col">
+                <span class="text-base capitalize font-medium"> {{payment.full_name}}</span>
+                <span class="text-xs text-gray-500">{{payment.paid_at_label}}</span>
+                </div>
+                <div class="flex w-1/4 flex-col items-center">
+                <span class="text-base font-medium">{{payment.period_label}}</span>
+                </div>
+                <div class="flex w-1/4 flex-col items-end">
+                <span class="text-base font-medium">${{payment.amount|floatformat:0|intcomma}}</span>
+                <span class="text-xs text-gray-500">{{payment.method}}</span>
+                </div>
+            </a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

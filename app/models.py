@@ -59,7 +59,7 @@ class Payment(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user_id} {self.period_label or ''}".strip()
+        return f"{self.user_id} {self.period_label or ''} {self.method}".strip()
 
 
 class BaseTimeslot(models.Model):
