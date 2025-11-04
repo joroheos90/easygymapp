@@ -116,7 +116,7 @@
                     <span class="text-base font-medium capitalize line-clamp-1"
                         >{{user.full_name}}</span
                     >
-                    <span class="text-xs text-gray-500 line-clamp-1">Vence los días {{user.day}}</span>
+                    <span class="text-xs text-gray-500 line-clamp-1">Próximo pago {{user.next_payment_date}}</span>
                 </div>
                 {% if user.paid_current_period %}
                 <span

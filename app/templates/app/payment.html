@@ -1,0 +1,90 @@
+{% extends "app/base.html" %} {% load customfilters %} {% block title %}
+{{is_edit|yesno:"Editar Pago,Nuevo Pago" }}{% endblock %} 
+{% block headerTitle %}Pago{% endblock %} {% block headerButtons %}
+<a
+    href="{% if user_id %}{% url 'app.profile' %}?userid={{ user_id }}{% else %}{% url 'app.home' %}{% endif %}"
+    class="cursor-pointer text-lg font-normal text-blue-500"
+    >Cancelar</a
+>
+<button form="pago-form" class="cursor-pointer text-lg font-bold text-blue-500">
+    Guardar
+</button>
+{% endblock %} {% block content %}
+<form
+    id="pago-form"
+    method="post"
+    class="flex flex-col gap-6 px-4 py-6 pb-6 font-roboto"
+>
+    {% csrf_token %}
+
+    {% if is_edit %}
+    <input type="hidden" name="pagoid" value="{{ pagoid }}" />
+    {% endif %}
+
+    <div class="flex flex-col gap-4">
+        <div class="flex flex-col rounded-[8px] bg-white px-4">
+            <select
+                name="user"
+                class="w-full py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+            >
+                <option value="">Miembro</option>
+                {% for u in users %}
+                    <option value="{{ u.id }}" {% if initial.user_id == u.id %}selected{% endif %}>{{ u.full_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex flex-col rounded-[8px] bg-white px-4">
+            <div class="flex items-center gap-2 border-b border-gray-400">
+                <span class="pt-3 pb-3 text-base">$</span>
+                <input
+                    type="text"
+                    name="amount"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    class="w-full px-1 py-3 text-right text-base font-normal tracking-widest ring-0 focus:ring-0 focus:outline-none"
+                    placeholder="Monto"
+                />
+            </div>
+            <select
+                name="method"
+                class="w-full py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+            >
+                <option value="">Metodo de pago</option>
+                {% for val,label in methods %}
+                    <option value="{{ val }}" {% if initial.method == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex flex-col rounded-[8px] bg-white px-4">
+            <div class="relative border-b border-gray-400">
+                <span class="absolute top-4 text-xs">Pagado</span>
+
+                <input
+                    type="date"
+                    name="paid_at"
+                    value="{{ initial.paid_at }}"
+                    class="w-full py-3 pl-11 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+                />
+            </div>
+            <select
+                name="period"
+                class="w-full py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+            >
+                <option value="">Periodo</option>
+                {% for val,label in periods %}
+                    <option value="{{ val }}" {% if initial.period == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex flex-col rounded-[8px] bg-white px-4">
+            <textarea
+                rows="5"
+                type="text"
+                name="notes"
+                class="w-full appearance-none px-1 py-3 text-sm font-normal capitalize ring-0 focus:ring-0 focus:outline-none"
+                placeholder="Notas (no obligatorio)"
+            ></textarea>
+        </div>
+    </div>
+</form>
+{% endblock %}

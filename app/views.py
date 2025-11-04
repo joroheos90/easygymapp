@@ -15,6 +15,9 @@ from datetime import date, timedelta
 from .models import DailyTimeslot, GymUser, UserWeight, Payment
 from dateutil.relativedelta import relativedelta
 from django.db.models import Max
+from calendar import monthrange
+
+
 
 def index(request):
     return render(request, "app/home.html")
@@ -78,10 +81,11 @@ def users(request):
             include = True
 
         if include:
+            _, de = _current_period_for(u)
             out.append({
                 "id": u.id,
                 "full_name": u.full_name,
-                "day": u.join_date.day,
+                "next_payment_date": format_es_date(de),
                 "paid_current_period": paid,
             })
 
@@ -116,13 +120,17 @@ def profile(request):
             "weight_kg": float(last_weight.weight_kg),
             "recorded_at": timezone.localtime(last_weight.recorded_at) if last_weight.recorded_at else None,
         }
-
+    ps, pe = _current_period_for(user)
+    has_paid = Payment.objects.filter(
+        user=user, period_start__lte=ps, period_end__gte=pe
+    ).exists()
     ctx = {
         "user": {
             "id": user.id,
             "full_name": user.full_name,
             "phone": getattr(user, "phone", None),
-            "next_payment_date": format_es_date(user.join_date),
+            "next_payment_date": format_es_date(pe),
+            "has_paid": has_paid,
             "join_date": format_es_date(user.join_date, include_year=True),
             "birth_date": format_es_date(user.birth_date, include_year=True),
             "is_active": user.is_active,
@@ -229,6 +237,177 @@ def edit(request):
         "phone": user.phone if user else "",
         "birth_date": user.birth_date.isoformat() if (user and user.birth_date) else "",
         "join_date": user.join_date.isoformat() if (user and user.join_date) else "",
-        "height_cm": user.height_cm or "",
+        "height_cm": user.height_cm if user else None,
     }
     return render(request, "app/editprofile.html", ctx)
+
+METHOD_CHOICES = [
+    ("CASH", "Efectivo"),
+    ("TRANSFER", "Transferencia"),
+    ("SINPE", "SINPE"),
+]
+
+MONTHS_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
+
+def _clamp_dom(y: int, m: int, dom: int) -> date:
+    return date(y, m, min(dom, monthrange(y, m)[1]))
+
+def _period_bounds_by_anchor(year: int, month: int, anchor_day: int) -> tuple[date, date]:
+    """
+    Devuelve (period_start, period_end_exclusive) anclado al día 'anchor_day'.
+    'month' es 1..12 y 'year' completo.
+    """
+    ps = _clamp_dom(year, month, anchor_day)
+    # siguiente mes:
+    ny = year + (1 if month == 12 else 0)
+    nm = 1 if month == 12 else month + 1
+    pe = _clamp_dom(ny, nm, anchor_day)  # exclusivo
+    return ps, pe
+
+def _period_label(year: int, month: int) -> str:
+    return f"{MONTHS_ES[month-1]}-{year}"
+
+def _parse_amount(raw: str) -> int:
+    """Quita separadores y devuelve entero en unidades (colones)."""
+    if not raw:
+        return 0
+    digits = "".join(ch for ch in str(raw) if ch.isdigit())
+    return int(digits or 0)
+
+def _period_options(n: int = 6) -> list[tuple[str, str]]:
+    """Meses desde el actual hacia adelante: value='YYYY-MM', label='Mes-YYYY'."""
+    today = timezone.localdate()
+    y, m = today.year, today.month
+    out = []
+    for i in range(n):
+        yy = y + (m + i - 1) // 12
+        mm = (m + i - 1) % 12 + 1
+        out.append((f"{yy:04d}-{mm:02d}", _period_label(yy, mm)))
+    return out
+
+
+def payment_view(request):
+    """
+    GET:
+      - Nuevo: /pago/
+      - Editar: /pago/?pagoid=<id>
+    POST:
+      - Crea o actualiza y redirige a home (si edit, añade ?pagoid=)
+    """
+    pagoid = request.GET.get("pagoid") or request.POST.get("pagoid")
+    pref_user_id = request.GET.get("userid") or request.POST.get("userid")
+
+    is_edit = bool(pagoid)
+
+    payment = None
+    if is_edit:
+        payment = get_object_or_404(Payment, pk=pagoid)
+
+    if request.method == "POST":
+        # --- leer form ---
+        user_id   = request.POST.get("user")
+        amount_in = request.POST.get("amount")
+        method    = request.POST.get("method") or ""
+        paid_at_s = request.POST.get("paid_at")  # YYYY-MM-DD
+        period_v  = request.POST.get("period")   # "YYYY-MM"
+        notes     = request.POST.get("notes") or ""
+
+        # Validaciones mínimas (frontend hará la UX)
+        if not user_id or not period_v or not paid_at_s or not method:
+            # Re-render simple con error
+            ctx = _pago_context(is_edit, pagoid, payment, pref_user_id)
+            ctx.update({"error": "Faltan campos obligatorios.",})
+            return render(request, "app/payment.html", ctx)
+
+        user = get_object_or_404(GymUser, pk=user_id)
+        amount = _parse_amount(amount_in)
+        # paid_at como date (tu diseño solo trae date; si usas datetime, ajústalo)
+        try:
+            y, m, d = map(int, paid_at_s.split("-"))
+            paid_at = date(y, m, d)
+        except Exception:
+            ctx = _pago_context(is_edit, pagoid, payment)
+            ctx.update({"error": "Fecha de pago inválida."})
+            return render(request, "app/payment.html", ctx)
+
+        # periodo (YYYY-MM) -> bounds y label
+        try:
+            py, pm = map(int, period_v.split("-"))
+        except Exception:
+            ctx = _pago_context(is_edit, pagoid, payment)
+            ctx.update({"error": "Periodo inválido."})
+            return render(request, "app/payment.html", ctx)
+
+        # Ancla por día de alta del usuario (si no tiene, usa día 1)
+        anchor_day = user.join_date.day if getattr(user, "join_date", None) else 1
+        period_start, period_end = _period_bounds_by_anchor(py, pm, anchor_day)
+        period_label = _period_label(py, pm)
+
+        # --- guardar ---
+        if is_edit:
+            p = payment
+            p.user = user
+            p.amount = amount
+            p.method = method
+            p.paid_at = paid_at
+            p.period_start = period_start
+            p.period_end = period_end
+            p.period_label = period_label
+            p.notes = notes
+            p.save()
+            return redirect("app.home")
+        else:
+            p = Payment.objects.create(
+                user=user,
+                amount=amount,
+                method=method,
+                paid_at=paid_at,
+                period_start=period_start,
+                period_end=period_end,
+                period_label=period_label,
+                notes=notes,
+            )
+            if pref_user_id:
+                return redirect(f"{reverse('app.profile')}?userid={pref_user_id}")
+            else:
+                return redirect("app.home")
+
+    # GET
+    ctx = _pago_context(is_edit, pagoid, payment, pref_user_id)
+    return render(request, "app/payment.html", ctx)
+
+
+def _pago_context(is_edit: bool, pagoid: str | None, payment: Payment | None, pref_user_id: str | None = None):
+    """Contexto común para el template."""
+    users = GymUser.objects.filter(is_active=True).only("id", "full_name").order_by("full_name")
+    methods = METHOD_CHOICES
+    periods = _period_options(7)  # meses sugeridos (ajusta a gusto)
+
+    initial = {}
+    if payment:
+        # Prellenar para edición (periodo en YYYY-MM)
+        ps = payment.period_start
+        initial = {
+            "user_id": payment.user_id,
+            "amount": payment.amount,
+            "method": payment.method,
+            "paid_at": payment.paid_at.isoformat() if hasattr(payment.paid_at, "isoformat") else "",
+            "period": f"{ps.year:04d}-{ps.month:02d}",
+            "notes": payment.notes or "",
+        }
+    elif pref_user_id:                                 # ← NUEVO
+        try:
+            initial["user_id"] = int(pref_user_id)     # ← NUEVO
+        except ValueError:
+            pass
+
+    return {
+        "is_edit": is_edit,
+        "user_id": pref_user_id,
+        "pagoid": pagoid,
+        "users": users,
+        "methods": methods,
+        "periods": periods,
+        "initial": initial,
+    }
+
