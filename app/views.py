@@ -12,15 +12,92 @@ from django.utils.dateparse import parse_date
 from django.http import HttpResponseBadRequest
 from app.models import GymUser
 from datetime import date, timedelta
-from .models import DailyTimeslot, GymUser, UserWeight, Payment
+from .models import DailyTimeslot, GymUser, BaseTimeslot, Payment
 from dateutil.relativedelta import relativedelta
-from django.db.models import Max
+from django.db.models import Max, Sum
 from calendar import monthrange
+from django.db import transaction
+from django.views.decorators.http import require_http_methods
 
 
 
 def index(request):
     return render(request, "app/home.html")
+
+def admin(request):
+    today = timezone.localdate()
+
+    active_members = GymUser.objects.filter(is_active=True).count()
+
+    qs = Payment.objects.all()
+    qs = qs.filter(period_start__lte=today, period_end__gt=today)
+
+    period_income = qs.aggregate(total=Sum("amount"))["total"] or 0
+
+    ctx = {
+        "active_members": active_members,
+        "period_income": period_income,
+        "period_label": _period_label(today.year, today.month)
+    }
+    return render(request, "app/admin.html", ctx)
+
+
+
+@require_http_methods(["GET", "POST"])
+def base_hours(request):
+
+    tomorrow = timezone.localdate() + timedelta(days=1)
+
+    if request.method == "POST":
+        created = 0
+        skipped = 0
+
+        base_qs = BaseTimeslot.objects.only("id", "title", "capacity", "is_active").filter(is_active=True)
+
+        with transaction.atomic():
+            for b in base_qs:
+                obj, made = DailyTimeslot.objects.get_or_create(
+                    base=b,
+                    slot_date=tomorrow,
+                    defaults={
+                        "title": b.title,
+                        "capacity": b.capacity,
+                        "status": "open",
+                    },
+                )
+                if made:
+                    created += 1
+                else:
+                    skipped += 1
+
+        # Redirige para evitar reenvío del form (PRG)
+        return redirect("app.base_hours")
+
+    qs = (
+        BaseTimeslot.objects
+        .only("id", "title", "capacity", "is_active")
+        .order_by("id")
+    )
+
+    hours = [
+        {
+            "id": h.id,
+            "title": h.title,
+            "capacity": h.capacity,
+            "is_active": h.is_active,
+            "is_active_label": "Activo" if h.is_active else "Inactivo",
+        }
+        for h in qs
+    ]
+
+    already_created = DailyTimeslot.objects.filter(slot_date=tomorrow).exists()
+    ctx = {
+        "hours": hours,
+        "tomorrow": tomorrow, 
+        "already_created_for_tomorrow": already_created,
+    }
+    return render(request, "app/base_hours.html", ctx)
+
 
 
 def selector(request):
@@ -167,13 +244,14 @@ def profile(request):
     }
     return render(request, "app/profile.html", ctx)
 
-
-
 def hours(request):
     q = request.GET.get("date")
     day = parse_date(q) if q else None
     if day is None:
         day = timezone.localdate()
+
+    prev_day = day - timedelta(days=1)
+    next_day = day + timedelta(days=1)
 
     slots = (
         DailyTimeslot.objects
@@ -204,7 +282,10 @@ def hours(request):
             "users": users,
         })
 
-    return render(request, "app/hours.html", {"hours": data, "date": format_es_date(day)})
+    return render(request, "app/hours.html", {"hours": data,
+                                                "prev_date": prev_day.isoformat(),
+                                                "next_date": next_day.isoformat(), 
+                                                "date": format_es_date(day)})
 
 
 

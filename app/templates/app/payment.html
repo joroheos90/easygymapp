@@ -2,7 +2,7 @@
 {{is_edit|yesno:"Editar Pago,Nuevo Pago" }}{% endblock %} 
 {% block headerTitle %}Pago{% endblock %} {% block headerButtons %}
 <a
-    href="{% if user_id %}{% url 'app.profile' %}?userid={{ user_id }}{% elif payment_id %}{% url 'app.payments' %}{% else %}{% url 'app.home' %}{% endif %}"
+    href="{% if user_id %}{% url 'app.profile' %}?userid={{ user_id }}{% elif payment_id %}{% url 'app.payments' %}{% else %}{% url 'app.admin' %}{% endif %}"
     class="cursor-pointer text-lg font-normal text-blue-500"
     >Cancelar</a
 >
