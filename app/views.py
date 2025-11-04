@@ -120,10 +120,36 @@ def profile(request):
             "weight_kg": float(last_weight.weight_kg),
             "recorded_at": timezone.localtime(last_weight.recorded_at) if last_weight.recorded_at else None,
         }
+
+
     ps, pe = _current_period_for(user)
     has_paid = Payment.objects.filter(
         user=user, period_start__lte=ps, period_end__gte=pe
     ).exists()
+
+    last_payment = (
+            Payment.objects
+            .filter(user=user)
+            .order_by("-period_end")
+            .only("id", "paid_at", "period_start", "period_end", "period_label")
+            .first()
+        )
+
+    last_payment_info = None
+    if last_payment:
+        last_payment_info = {
+            "id": last_payment.id,
+            "paid_at": format_es_date(last_payment.paid_at, include_year=True) if last_payment.paid_at else "",
+            # usa el label guardado si existe; si no, lo calculamos desde period_start
+            "period_paid_label": (
+                last_payment.period_label
+                if getattr(last_payment, "period_label", None)
+                else _period_label(last_payment.period_start.year, last_payment.period_start.month)
+            ),
+        }
+
+
+
     ctx = {
         "user": {
             "id": user.id,
@@ -136,6 +162,7 @@ def profile(request):
             "is_active": user.is_active,
             "height_cm": user.height_cm,
             "weight": weight,
+            "last_payment": last_payment_info,
         }
     }
     return render(request, "app/profile.html", ctx)
@@ -236,7 +263,7 @@ def edit(request):
         "last_name":  (user.full_name.split(" ", 1)[1] if (user and " " in user.full_name) else ""),
         "phone": user.phone if user else "",
         "birth_date": user.birth_date.isoformat() if (user and user.birth_date) else "",
-        "join_date": user.join_date.isoformat() if (user and user.join_date) else "",
+        "join_date": user.join_date.isoformat() if (user and user.join_date) else timezone.localdate().isoformat(),
         "height_cm": user.height_cm if user else None,
     }
     return render(request, "app/editprofile.html", ctx)
@@ -265,7 +292,7 @@ def _period_bounds_by_anchor(year: int, month: int, anchor_day: int) -> tuple[da
     return ps, pe
 
 def _period_label(year: int, month: int) -> str:
-    return f"{MONTHS_ES[month-1]}-{year}"
+    return f"{MONTHS_ES[month-1]} {year}"
 
 def _parse_amount(raw: str) -> int:
     """Quita separadores y devuelve entero en unidades (colones)."""
@@ -286,7 +313,7 @@ def _period_options(n: int = 6) -> list[tuple[str, str]]:
     return out
 
 
-def payment_view(request):
+def payment(request):
     """
     GET:
       - Nuevo: /pago/
@@ -381,7 +408,7 @@ def _pago_context(is_edit: bool, pagoid: str | None, payment: Payment | None, pr
     """Contexto común para el template."""
     users = GymUser.objects.filter(is_active=True).only("id", "full_name").order_by("full_name")
     methods = METHOD_CHOICES
-    periods = _period_options(7)  # meses sugeridos (ajusta a gusto)
+    periods = _period_options(2)
 
     initial = {}
     if payment:
@@ -395,9 +422,11 @@ def _pago_context(is_edit: bool, pagoid: str | None, payment: Payment | None, pr
             "period": f"{ps.year:04d}-{ps.month:02d}",
             "notes": payment.notes or "",
         }
-    elif pref_user_id:                                 # ← NUEVO
+    else:                                 # ← NUEVO
         try:
-            initial["user_id"] = int(pref_user_id)     # ← NUEVO
+            if pref_user_id:
+                initial["user_id"] = int(pref_user_id)
+                initial["paid_at"] = timezone.localdate().isoformat() 
         except ValueError:
             pass
 
