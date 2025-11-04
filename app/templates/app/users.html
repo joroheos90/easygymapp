@@ -2,11 +2,22 @@
 {% load customfilters %}
 {% block title %}Usuarios{% endblock %} 
 {% block headerTitle %}Usuarios{% endblock %} {% block headerButtons %}
-<a
-    href="{% url 'app.home' %}"
-    class="cursor-pointer text-lg font-normal text-blue-500"
-    >Cancelar</a
->
+<a href="{% url 'app.home' %}" class="cursor-pointer text-lg font-normal">
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="size-6"
+    >
+        <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M15.75 19.5 8.25 12l7.5-7.5"
+        />
+    </svg>
+</a>
 <a
     href="{% url 'app.edit' %}"
     class="cursor-pointer text-lg font-bold text-blue-500"
@@ -39,33 +50,53 @@
     <div class="flex w-full flex-row gap-2 overflow-x-auto">
         <a
             href="{% url 'app.users'%}?filter=all"
-            class="h-6 cursor-pointer rounded-full border px-2 text-sm font-bold 
+            class="h-7 cursor-pointer rounded-full text-nowrap flex items-center border px-2 text-sm font-bold 
             {% if filter == 'all' %} bg-green-200 text-green-800 
             {% else %} text-gray-500 {% endif %}"
         >
             Todos
         </a>
         <a
+            href="{% url 'app.users'%}?filter=up_to_date"
+            class="h-7 cursor-pointer rounded-full text-nowrap flex items-center border px-2 text-sm font-bold 
+            {% if filter == 'up_to_date' %} bg-green-200 text-green-800 
+            {% else %} text-gray-500 {% endif %}"
+        >
+            Al día
+        </a>
+        <a
             href="{% url 'app.users'%}?filter=overdue"
-            class="h-6 cursor-pointer rounded-full border px-2 text-sm font-bold 
+            class="h-7 cursor-pointer rounded-full text-nowrap flex items-center border px-2 text-sm font-bold 
             {% if filter == 'overdue' %} bg-green-200 text-green-800 
             {% else %} text-gray-500 {% endif %}"
         >
             Vencidos
         </a>
+        
+        <a
+            href="{% url 'app.users'%}?filter=due_in_3"
+            class="h-7 cursor-pointer text-nowrap rounded-full flex items-center border px-2 text-sm font-bold 
+            {% if filter == 'due_in_3' %} bg-green-200 text-green-800 
+            {% else %} text-gray-500 {% endif %}"
+        >
+            Vence en 3 días
+        </a>
+        <a
+            href="{% url 'app.users'%}?filter=due_in_7"
+            class="h-7 cursor-pointer text-nowrap rounded-full flex items-center border px-2 text-sm font-bold 
+            {% if filter == 'due_in_7' %} bg-green-200 text-green-800 
+            {% else %} text-gray-500 {% endif %}"
+        >
+            Vence en 7 días
+        </a>
         <a
             href="{% url 'app.users'%}?filter=delinquent"
-            class="h-6 cursor-pointer rounded-full border px-2 text-sm font-bold 
+            class="h-7 cursor-pointer  rounded-full text-nowrap flex items-center border px-2 text-sm font-bold 
             {% if filter == 'delinquent' %} bg-green-200 text-green-800 
             {% else %} text-gray-500 {% endif %}"
         >
             Morosos
         </a>
-        <div
-            class="h-6 cursor-pointer rounded-full border px-2 text-sm font-bold text-gray-500"
-        >
-            Favoritos
-        </div>
     </div>
     <div class="flex flex-col gap-2">
         {% for user in users %}
@@ -82,20 +113,20 @@
                 class="flex w-full flex-row items-center justify-between border-b border-gray-400 py-2"
             >
                 <div class="flex flex-col">
-                    <span class="text-base font-medium line-clamp-1"
+                    <span class="text-base font-medium capitalize line-clamp-1"
                         >{{user.full_name}}</span
                     >
-                    <span class="text-xs text-gray-500">{{user.phone}}</span>
+                    <span class="text-xs text-gray-500 line-clamp-1">Vence los días {{user.day}}</span>
                 </div>
                 {% if user.paid_current_period %}
                 <span
-                    class="flex h-6 w-[100px] items-center justify-center rounded-[4px] bg-green-500 px-4 text-[10px] leading-none font-bold text-white"
-                    >Al corriente</span
+                    class="flex h-6 w-[70px] text-nowrap items-center justify-center rounded-[4px] bg-green-500 px-4 text-[10px] leading-none font-bold text-white"
+                    >Al día</span
                 >
                 {% else %}
                 <span
-                    class="flex h-6 w-[100px] items-center justify-center rounded-[4px] bg-red-500 px-4 text-[10px] leading-none font-bold text-white"
-                    >Pago Vencido</span
+                    class="flex h-6 w-[70px] text-nowrap items-center justify-center rounded-[4px] bg-red-500 px-4 text-[10px] leading-none font-bold text-white"
+                    >Vencido</span
                 >
                 {% endif %}
             </div>

@@ -11,9 +11,10 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.http import HttpResponseBadRequest
 from app.models import GymUser
-from datetime import date
+from datetime import date, timedelta
 from .models import DailyTimeslot, GymUser, UserWeight, Payment
 from dateutil.relativedelta import relativedelta
+from django.db.models import Max
 
 def index(request):
     return render(request, "app/home.html")
@@ -24,58 +25,70 @@ def selector(request):
 
 
 def _current_period_for(user: GymUser, ref: date | None = None) -> tuple[date, date]:
-    """
-    Monthly period anchored to the user's join_date.day.
-    Returns (start, end) where end is exclusive.
-    """
     today = ref or timezone.localdate()
-    anchor_day = user.join_date.day
-    if today.day < anchor_day:
-        # period started last month on anchor_day
-        start = (today.replace(day=1) - relativedelta(months=1)).replace(day=anchor_day)
+    anchor = user.join_date.day
+    if today.day < anchor:
+        start = (today.replace(day=1) - relativedelta(months=1)).replace(day=anchor)
     else:
-        start = today.replace(day=anchor_day)
-    end = start + relativedelta(months=1)
+        start = today.replace(day=anchor)
+    end = start + relativedelta(months=1)  # exclusivo
     return start, end
 
 
 def users(request):
-    """
-    /users/?filter=all|delinquent|overdue
-    - all:      all active users
-    - delinquent/overdue: only those who have NOT paid their current period
-    Context -> {"users": [{"full_name": ..., "phone": ..., "paid_current_period": bool}, ...]}
-    """
     filt = (request.GET.get("filter") or "all").strip().lower()
-    today = timezone.localdate()
+    delinquent_days = int(request.GET.get("days") or 30)
 
-    # Base queryset: active users (ajusta si quieres incluir inactivos)
-    qs = GymUser.objects.filter(is_active=True).only("id", "full_name", "phone", "join_date").order_by("full_name")
+    today = timezone.localdate()
+    qs = (
+        GymUser.objects
+        .filter(is_active=True)
+        .only("id", "full_name", "join_date")
+        .order_by("full_name")
+    )
 
     out = []
     for u in qs:
         ps, pe = _current_period_for(u, ref=today)
-        paid = Payment.objects.filter(user=u, period_start__lte=ps, period_end__gte=pe).exists()
-        record = {
-            "id": u.id,
-            "full_name": u.full_name,
-            "phone": getattr(u, "phone", None),
-            "paid_current_period": paid,
-        }
-        if filt in ("delinquent", "overdue"):
-            if not paid:
-                out.append(record)
-        else:  # "all" or anything else
-            out.append(record)
+        paid = Payment.objects.filter(
+            user=u, period_start__lte=ps, period_end__gte=pe
+        ).exists()
+
+        agg = Payment.objects.filter(user=u).aggregate(last_end=Max("period_end"))
+        last_end = agg["last_end"]
+        if last_end:
+            last_covered_day = last_end - timedelta(days=1)
+            days_since_last_cover = (today - last_covered_day).days
+        else:
+            days_since_last_cover = 10**9
+
+        days_to_due = (pe - today).days
+        include = False
+        if filt == "overdue":
+            include = (not paid)
+        elif filt == "delinquent":
+            include = (not paid) and (days_since_last_cover > delinquent_days)
+        elif filt == "up_to_date":
+            include = paid
+        elif filt == "due_in_3":
+            include = (1 <= days_to_due <= 3)
+        elif filt == "due_in_7":
+            include = (1 <= days_to_due <= 7)
+        else:  # "all" (o cualquier otro valor)
+            include = True
+
+        if include:
+            out.append({
+                "id": u.id,
+                "full_name": u.full_name,
+                "day": u.join_date.day,
+                "paid_current_period": paid,
+            })
 
     return render(request, "app/users.html", {"users": out, "filter": filt})
 
 
 def profile(request):
-    """
-    /profile/?userid=2323
-    Lee el ID desde el querystring (?userid=...) y renderiza el perfil completo.
-    """
     raw = request.GET.get("userid")
     if not raw:
         return HttpResponseBadRequest("Falta el parámetro ?userid")
@@ -109,8 +122,9 @@ def profile(request):
             "id": user.id,
             "full_name": user.full_name,
             "phone": getattr(user, "phone", None),
-            "join_date": format_es_date(user.join_date),
-            "birth_date": format_es_date(user.birth_date),
+            "next_payment_date": format_es_date(user.join_date),
+            "join_date": format_es_date(user.join_date, include_year=True),
+            "birth_date": format_es_date(user.birth_date, include_year=True),
             "is_active": user.is_active,
             "weight": weight,
         }
@@ -180,57 +194,41 @@ def edit(request):
         full_name  = (first_name + " " + last_name).strip() or "Sin nombre"
 
         phone      = (request.POST.get("phone") or "").strip() or None
-        birth_date = parse_date(request.POST.get("birth_date") or "")  # None si vacío
-
-        # Opcionales de estatura y peso
-        height_cm  = request.POST.get("height_cm")  # si tienes campo height_cm en el modelo
-        weight_kg  = request.POST.get("weight_kg")
+        birth_date = parse_date(request.POST.get("birth_date") or "")
+        join_date = parse_date(request.POST.get("join_date") or "")
+        height_cm  = request.POST.get("height_cm")
 
         if user is None:
-            # Nuevo
             user = GymUser.objects.create(
                 full_name=full_name,
                 role="member",
-                join_date=date.today(),
+                join_date=join_date,
                 birth_date=birth_date,
                 phone=phone,
                 # si agregaste height_cm en tu modelo, descomenta:
                 # height_cm=height_cm or None,
             )
         else:
-            # Update
             user.full_name = full_name
             user.birth_date = birth_date
             user.phone = phone
-            # si agregaste height_cm:
+            user.join_date = join_date
             # user.height_cm = height_cm or None
-            user.save(update_fields=["full_name", "birth_date", "phone", "updated_at"])
-
-        # Si viene peso, guarda registro de peso más reciente
-        try:
-            if weight_kg:
-                val = float(weight_kg)
-                if val > 0:
-                    UserWeight.objects.create(
-                        user=user,
-                        weight_kg=val,
-                        recorded_at=timezone.now(),
-                    )
-        except ValueError:
-            pass  # si no es número, lo ignoramos (validas en front)
+            user.save(update_fields=["full_name", "birth_date", "phone", "join_date", "updated_at"])
 
         base_url = reverse("app.profile")                 # -> "/profile/"
         query = urlencode({"userid": user.id})            # -> "userid=123"
         return redirect(f"{base_url}?{query}") 
 
-    # GET: render form con valores iniciales
     ctx = {
         "is_edit": bool(user),
         "userid": user.id if user else None,
+        "full_name": user.full_name if user else None,
         "first_name": (user.full_name.split(" ", 1)[0] if user else ""),
         "last_name":  (user.full_name.split(" ", 1)[1] if (user and " " in user.full_name) else ""),
         "phone": user.phone if user else "",
         "birth_date": user.birth_date.isoformat() if (user and user.birth_date) else "",
+        "join_date": user.join_date.isoformat() if (user and user.join_date) else "",
         # Si usas height_cm en el modelo:
         # "height_cm": user.height_cm or "",
     }
