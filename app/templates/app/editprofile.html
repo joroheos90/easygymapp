@@ -103,11 +103,11 @@
 </form>
 
 {% if is_edit %}
-<form method="post" class="flex flex-col rounded-[8px] bg-white px-4 py-2 mt-4">
+<form method="post" class="flex flex-col items-center rounded-[8px] bg-white px-4 py-2 mt-4">
     {% csrf_token %}
     <input type="hidden" name="action" value="delete" />
     <button class="cursor-pointer font-normal text-red-500 text-left">
-        Borrar Cliente
+        Borrar Miembro
     </button>
 </form>
 {% endif %} {% endblock %}

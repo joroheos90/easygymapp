@@ -126,6 +126,7 @@ def profile(request):
             "join_date": format_es_date(user.join_date, include_year=True),
             "birth_date": format_es_date(user.birth_date, include_year=True),
             "is_active": user.is_active,
+            "height_cm": user.height_cm,
             "weight": weight,
         }
     }
@@ -187,7 +188,7 @@ def edit(request):
             if not user:
                 return HttpResponseBadRequest("No puedes borrar: usuario no encontrado")
             user.delete()
-            return redirect("app.hours")
+            return redirect("app.users")
 
         first_name = (request.POST.get("first_name") or "").strip()
         last_name  = (request.POST.get("last_name") or "").strip()
@@ -205,16 +206,15 @@ def edit(request):
                 join_date=join_date,
                 birth_date=birth_date,
                 phone=phone,
-                # si agregaste height_cm en tu modelo, descomenta:
-                # height_cm=height_cm or None,
+                height_cm=height_cm or None,
             )
         else:
             user.full_name = full_name
             user.birth_date = birth_date
             user.phone = phone
             user.join_date = join_date
-            # user.height_cm = height_cm or None
-            user.save(update_fields=["full_name", "birth_date", "phone", "join_date", "updated_at"])
+            user.height_cm = height_cm or None
+            user.save(update_fields=["full_name", "birth_date", "phone", "join_date", "height_cm", "updated_at"])
 
         base_url = reverse("app.profile")                 # -> "/profile/"
         query = urlencode({"userid": user.id})            # -> "userid=123"
@@ -229,7 +229,6 @@ def edit(request):
         "phone": user.phone if user else "",
         "birth_date": user.birth_date.isoformat() if (user and user.birth_date) else "",
         "join_date": user.join_date.isoformat() if (user and user.join_date) else "",
-        # Si usas height_cm en el modelo:
-        # "height_cm": user.height_cm or "",
+        "height_cm": user.height_cm or "",
     }
     return render(request, "app/editprofile.html", ctx)
