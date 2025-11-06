@@ -1,9 +1,47 @@
-# app/helpers.py
 from __future__ import annotations
-
 from datetime import date, timedelta, datetime
 from typing import Dict, Optional
 from django.utils import timezone
+from functools import wraps
+from typing import Iterable, Optional
+from django.http import HttpResponseForbidden, HttpRequest, HttpResponse
+from django.shortcuts import redirect
+from django.urls import reverse
+
+from app.models import GymUser
+
+def _get_gym_user_for_request(request: HttpRequest) -> Optional[GymUser]:
+    u = getattr(request, "user", None)
+    if not u or not u.is_authenticated:
+        return None
+    try:
+        member_id = int(u.username)
+    except (TypeError, ValueError):
+        return None
+    try:
+        return GymUser.objects.only("id", "role", "is_active").get(pk=member_id, is_active=True)
+    except GymUser.DoesNotExist:
+        return None
+
+def role_required(roles: Iterable[str], forbid: bool = False):
+    roles_set = set(roles)
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped(request: HttpRequest, *args, **kwargs) -> HttpResponse:
+            if not request.user.is_authenticated:
+                return redirect(f"{reverse('app.login')}?next={request.get_full_path()}")
+            gu = _get_gym_user_for_request(request)
+            if not gu:
+                return redirect("app.home")
+            if gu.role not in roles_set:
+                if forbid:
+                    return redirect("app.home")
+                return redirect("app.home")
+            request.gym_user = gu
+            return view_func(request, *args, **kwargs)
+        return _wrapped
+    return decorator
+
 
 # -----------------------------
 # Formatting helpers

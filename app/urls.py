@@ -13,4 +13,8 @@ urlpatterns = [
     path("users", views.users, name="app.users"),
     path("payments", views.payments, name="app.payments"),
     path("panel", views.admin, name="app.admin"),
+    path("login/", views.AppLoginView.as_view(), name="app.login"),
+    path("logout/", views.logout_view, name="app.logout"),
+    path("profile/password/", views.MemberPasswordChangeView.as_view(), name="app.password_change"),
+    
 ]

@@ -3,7 +3,10 @@ from django.shortcuts import render, get_object_or_404, redirect
 from .helpers import (
     signed_at_parts,
     format_es_date,
+    role_required,
 )
+from django.contrib.auth import get_user_model
+from django.contrib.auth.decorators import login_required
 from django.urls import reverse
 from urllib.parse import urlencode
 from django.shortcuts import render
@@ -20,10 +23,12 @@ from django.db import transaction
 from django.views.decorators.http import require_http_methods
 
 
-
+@login_required
 def index(request):
     return render(request, "app/home.html")
 
+@login_required
+@role_required(["admin"])
 def admin(request):
     today = timezone.localdate()
 
@@ -169,6 +174,8 @@ def users(request):
     return render(request, "app/users.html", {"users": out, "filter": filt})
 
 
+@login_required
+@role_required(["admin", "member"])
 def profile(request):
     raw = request.GET.get("userid")
     if not raw:
@@ -331,6 +338,13 @@ def edit(request):
             user.join_date = join_date
             user.height_cm = height_cm or None
             user.save(update_fields=["full_name", "birth_date", "phone", "join_date", "height_cm", "updated_at"])
+
+        User = get_user_model()
+        username = str(user.id)
+        if not User.objects.filter(username=username).exists():
+            auth_u = User(username=username, first_name=first_name, last_name=last_name)
+            auth_u.set_password("gim12345")
+            auth_u.save()
 
         base_url = reverse("app.profile")                 # -> "/profile/"
         query = urlencode({"userid": user.id})            # -> "userid=123"
@@ -603,3 +617,48 @@ def payments(request):
         "user_id": userid or "",
     })
 
+# app/views.py
+from django.contrib.auth.views import LoginView, PasswordChangeView
+from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
+from django.contrib.auth import logout
+from django.shortcuts import redirect
+from django.urls import reverse_lazy
+
+# --- Custom Auth Form: solo para renombrar el label de username ---
+class MemberLoginForm(AuthenticationForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Renombra el campo username para que se vea como "Número de miembro"
+        self.fields["username"].label = "Número de miembro"
+        self.fields["username"].widget.attrs.update({
+            "placeholder": "Tu número de miembro",
+            "autocomplete": "username",
+        })
+        self.fields["password"].widget.attrs.update({
+            "placeholder": "Contraseña",
+            "autocomplete": "current-password",
+        })
+
+# --- Login ---
+class AppLoginView(LoginView):
+    template_name = "app/login.html"
+    authentication_form = MemberLoginForm
+    redirect_authenticated_user = True
+
+    # Mantén sesión abierta N días desde settings; si quieres forzarlo aquí:
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # Si quisieras un valor distinto al global:
+        # self.request.session.set_expiry(60 * 60 * 24 * 21)
+        return response
+
+# --- Logout ---
+def logout_view(request):
+    logout(request)
+    return redirect("app.login")
+
+# --- Cambio de contraseña ---
+class MemberPasswordChangeView(PasswordChangeView):
+    template_name = "app/password_change.html"
+    form_class = PasswordChangeForm
+    success_url = reverse_lazy("app.home")  # vuelve al home después de cambiar
