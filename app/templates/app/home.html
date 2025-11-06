@@ -40,7 +40,7 @@
                 <span class="text-3xl font-bold uppercase">Easy Gym</span>
             </a>
             <a
-                href="{% if is_admin %}{% url 'app.admin' %}{% else %}{% url 'app.profile' %}?{{user_id}}{% endif %}"
+                href="{% if is_admin %}{% url 'app.admin' %}{% else %}{% url 'app.profile' %}?userid={{gym_profile.id}}{% endif %}"
                 class="flex h-[100px] w-full flex-row items-center gap-6 rounded-[24px] bg-black/70 px-4"
             >
                 <svg

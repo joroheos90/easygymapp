@@ -1,8 +1,17 @@
 from django.db import models
 from django.utils import timezone
+from django.conf import settings
+
 
 
 class GymUser(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="gym_profile",
+        null=False, blank=False,           # Fase 1: permitir nulos para poblar
+    )
+
     class Role(models.TextChoices):
         ADMIN = "admin", "Admin"
         MEMBER = "member", "Member"
@@ -27,7 +36,7 @@ class GymUser(models.Model):
         ]
 
     def __str__(self):
-        return self.full_name
+        return f"{self.id} {self.full_name} {self.user.id}".strip()
 
 
 class Payment(models.Model):

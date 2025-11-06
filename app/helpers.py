@@ -10,18 +10,12 @@ from django.urls import reverse
 
 from app.models import GymUser
 
-def _get_gym_user_for_request(request: HttpRequest) -> Optional[GymUser]:
+def _get_gym_user_for_request(request):
     u = getattr(request, "user", None)
     if not u or not u.is_authenticated:
         return None
-    try:
-        member_id = int(u.username)
-    except (TypeError, ValueError):
-        return None
-    try:
-        return GymUser.objects.only("id", "role", "is_active").get(pk=member_id, is_active=True)
-    except GymUser.DoesNotExist:
-        return None
+    return getattr(u, "gym_profile", None)
+
 
 def role_required(roles: Iterable[str], forbid: bool = False):
     roles_set = set(roles)

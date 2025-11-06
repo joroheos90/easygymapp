@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Iterable, Optional, Tuple
 from dateutil.relativedelta import relativedelta
+from django.contrib.auth import get_user_model
+from uuid import uuid4
+
 
 from django.db import transaction, IntegrityError
 from django.db.models import Count, Q, F
@@ -75,18 +78,36 @@ class SlotStatus:
 
 # ---------- Service ----------
 class GymService:
-    # ===== USERS =====
-    @staticmethod
-    def create_user(*, full_name: str, role: str, join_date, birth_date=None,
-                    is_active: bool = True, phone: str | None = None) -> GymUser:
-        return GymUser.objects.create(
-            full_name=full_name,
-            role=role,
-            join_date=join_date,
-            birth_date=birth_date,
+    @transaction.atomic
+    def crear_gymuser_y_user(full_name: str, is_active: bool = True, password: str = "gim12345"):
+        UserModel = get_user_model()
+
+        # 1) Crear auth.User con username temporal único
+        tmp_username = f"tmp-{uuid4().hex}"
+        u = UserModel.objects.create_user(username=tmp_username, password=password)
+        parts = (full_name or "").strip().split(" ", 1)
+        u.first_name = parts[0] if parts else ""
+        u.last_name  = parts[1] if len(parts) > 1 else ""
+        u.is_active  = is_active
+        u.save(update_fields=["first_name", "last_name", "is_active"])
+
+        # 2) Crear GymUser ENLAZADO (evita NOT NULL)
+        g = GymUser.objects.create(
+            user=u,
+            full_name=full_name or "Sin nombre",
+            role="member",
+            join_date=timezone.localdate(),
             is_active=is_active,
-            phone=phone,  # <- simple string
         )
+
+        # 3) Ajustar username definitivo = id del GymUser
+        final_username = str(g.id)
+        if u.username != final_username:
+            u.username = final_username
+            u.save(update_fields=["username"])
+
+        return g, u
+
 
     @staticmethod
     def update_user(user_id: int, **fields) -> GymUser:

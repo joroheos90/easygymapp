@@ -83,7 +83,8 @@
                     type="date"
                     name="join_date"
                     value="{{join_date}}"
-                    class="w-full py-3  pl-11 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+                    {% if is_member %}disabled{% endif %}
+                    class="w-full py-3 disabled:bg-gray-200 disabled:text-gray-400 pl-11 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
                 />
             </div>
         </div>
@@ -102,7 +103,7 @@
     </div>
 </form>
 
-{% if is_edit %}
+{% if is_edit and is_admin %}
 <form method="post" class="flex flex-col items-center rounded-[8px] bg-white px-4 py-2 mt-4">
     {% csrf_token %}
     <input type="hidden" name="action" value="delete" />
@@ -110,4 +111,13 @@
         Borrar Miembro
     </button>
 </form>
-{% endif %} {% endblock %}
+{% endif %}
+{% if is_edit and is_member %}
+<div method="post" class="flex flex-col mb-6 items-center rounded-[8px] bg-white px-4 py-2 mt-4">
+    <a href="{% url 'app.password_change' %}" class="cursor-pointer font-normal text-blue-500 text-left">
+        Cambiar mi contraseña
+    </a>
+</div>
+{% endif %}
+
+{% endblock %}

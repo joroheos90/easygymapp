@@ -47,7 +47,8 @@ def admin(request):
     return render(request, "app/admin.html", ctx)
 
 
-
+@login_required
+@role_required(["admin"])
 @require_http_methods(["GET", "POST"])
 def base_hours(request):
 
@@ -120,6 +121,8 @@ def _current_period_for(user: GymUser, ref: date | None = None) -> tuple[date, d
     return start, end
 
 
+@login_required
+@role_required(["admin"])
 def users(request):
     filt = (request.GET.get("filter") or "all").strip().lower()
     delinquent_days = int(request.GET.get("days") or 30)
@@ -175,7 +178,6 @@ def users(request):
 
 
 @login_required
-@role_required(["admin", "member"])
 def profile(request):
     raw = request.GET.get("userid")
     if not raw:
@@ -251,6 +253,8 @@ def profile(request):
     }
     return render(request, "app/profile.html", ctx)
 
+@login_required
+@role_required(["admin"])
 def hours(request):
     q = request.GET.get("date")
     day = parse_date(q) if q else None
@@ -294,72 +298,108 @@ def hours(request):
                                                 "next_date": next_day.isoformat(), 
                                                 "date": format_es_date(day)})
 
+# app/views.py
+from django.shortcuts import get_object_or_404, render, redirect
+from django.http import HttpResponseBadRequest
+from django.urls import reverse
+from django.utils.http import urlencode
+from django.utils import timezone
+from django.utils.dateparse import parse_date
 
+from app.models import GymUser
+from app.services import GymService
 
+@login_required
+@role_required(["member", "admin"])
 def edit(request):
     raw = request.GET.get("userid")
-    user = None
+    gym_user = request.gym_user
+    is_admin = (gym_user.role == "admin")
+    member = None
     if raw:
         try:
-            user_id = int(raw)
+            member_id = int(raw)
         except (TypeError, ValueError):
             return HttpResponseBadRequest("userid inválido")
-        user = get_object_or_404(GymUser, pk=user_id)
+        member = get_object_or_404(GymUser, pk=member_id)
+
+    if not is_admin:
+        if member is None:
+            return redirect("app.home")
+        if member.id != gym_user.id:
+            return redirect("app.home")
+
 
     if request.method == "POST":
         if request.POST.get("action") == "delete":
-            if not user:
+            if not member:
                 return HttpResponseBadRequest("No puedes borrar: usuario no encontrado")
-            user.delete()
+            # borra GymUser (OneToOne con on_delete=CASCADE borrará también el auth.User)
+            member.delete()
             return redirect("app.users")
 
+        # ---- datos del form ----
         first_name = (request.POST.get("first_name") or "").strip()
         last_name  = (request.POST.get("last_name") or "").strip()
         full_name  = (first_name + " " + last_name).strip() or "Sin nombre"
 
         phone      = (request.POST.get("phone") or "").strip() or None
         birth_date = parse_date(request.POST.get("birth_date") or "")
-        join_date = parse_date(request.POST.get("join_date") or "")
-        height_cm  = request.POST.get("height_cm")
+        join_date  = parse_date(request.POST.get("join_date") or "") or timezone.localdate()
+        height_cm  = request.POST.get("height_cm") or None
+        is_active  = True  # si agregas toggle en UI, léelo aquí
 
-        if user is None:
-            user = GymUser.objects.create(
-                full_name=full_name,
-                role="member",
-                join_date=join_date,
-                birth_date=birth_date,
-                phone=phone,
-                height_cm=height_cm or None,
-            )
+        if member is None:
+            # Crear GymUser + auth.User (OneToOne) con password por defecto
+            member, auth_u = GymService.crear_gymuser_y_user(full_name=full_name, is_active=is_active, password="gim12345")
+            # Completar/ajustar campos del perfil recién creado
+            member.phone = phone
+            member.birth_date = birth_date
+            member.join_date = join_date
+            member.height_cm = height_cm
+            member.save(update_fields=["phone", "birth_date", "join_date", "height_cm", "updated_at"])
         else:
-            user.full_name = full_name
-            user.birth_date = birth_date
-            user.phone = phone
-            user.join_date = join_date
-            user.height_cm = height_cm or None
-            user.save(update_fields=["full_name", "birth_date", "phone", "join_date", "height_cm", "updated_at"])
+            # Update GymUser
+            member.full_name  = full_name
+            member.phone      = phone
+            member.birth_date = birth_date
+            member.join_date  = join_date
+            member.height_cm  = height_cm
+            member.is_active  = is_active
+            member.save(update_fields=["full_name", "phone", "birth_date", "join_date", "height_cm", "is_active", "updated_at"])
 
-        User = get_user_model()
-        username = str(user.id)
-        if not User.objects.filter(username=username).exists():
-            auth_u = User(username=username, first_name=first_name, last_name=last_name)
-            auth_u.set_password("gim12345")
-            auth_u.save()
+            # Sync con auth.User si está enlazado
+            if member.user_id:
+                au = member.user
+                # separar nombres
+                fn = first_name
+                ln = last_name
+                updates = []
+                if au.first_name != fn:
+                    au.first_name = fn; updates.append("first_name")
+                if au.last_name != ln:
+                    au.last_name = ln; updates.append("last_name")
+                if au.is_active != member.is_active:
+                    au.is_active = member.is_active; updates.append("is_active")
+                if updates:
+                    au.save(update_fields=updates)
 
-        base_url = reverse("app.profile")                 # -> "/profile/"
-        query = urlencode({"userid": user.id})            # -> "userid=123"
-        return redirect(f"{base_url}?{query}") 
+        # redirect a perfil
+        base_url = reverse("app.profile")
+        query = urlencode({"userid": member.id})
+        return redirect(f"{base_url}?{query}")
 
+    # ---- GET: pintar formulario ----
     ctx = {
-        "is_edit": bool(user),
-        "userid": user.id if user else None,
-        "full_name": user.full_name if user else None,
-        "first_name": (user.full_name.split(" ", 1)[0] if user else ""),
-        "last_name":  (user.full_name.split(" ", 1)[1] if (user and " " in user.full_name) else ""),
-        "phone": user.phone if user else "",
-        "birth_date": user.birth_date.isoformat() if (user and user.birth_date) else "",
-        "join_date": user.join_date.isoformat() if (user and user.join_date) else timezone.localdate().isoformat(),
-        "height_cm": user.height_cm if user else None,
+        "is_edit": bool(member),
+        "userid": member.id if member else None,
+        "full_name": member.full_name if member else None,
+        "first_name": (member.full_name.split(" ", 1)[0] if member else ""),
+        "last_name":  (member.full_name.split(" ", 1)[1] if (member and " " in member.full_name) else ""),
+        "phone": member.phone if member else "",
+        "birth_date": member.birth_date.isoformat() if (member and member.birth_date) else "",
+        "join_date": member.join_date.isoformat() if (member and member.join_date) else timezone.localdate().isoformat(),
+        "height_cm": member.height_cm if member else None,
     }
     return render(request, "app/editprofile.html", ctx)
 
@@ -408,6 +448,8 @@ def _period_options(n: int = 6) -> list[tuple[str, str]]:
     return out
 
 
+@login_required
+@role_required(["admin"])
 def payment(request):
     """
     GET:
@@ -538,29 +580,26 @@ def _pago_context(is_edit: bool, pagoid: str | None, payment: Payment | None, pr
         "initial": initial,
     }
 
+@login_required
+@role_required(["member", "admin"])
 def payments(request):
-    """
-    /pagos/?filter=all
-             |period&period=YYYY-MM
-             |last_3
-             |last_7
-             [&userid=<id>]
+    gym_user = request.gym_user
+    is_member = (gym_user.role == "member")
+    raw = request.GET.get("userid")
+    try:
+        userid = int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        userid = None
 
-    - all          : todos los pagos (por defecto)
-    - period       : pagos cuyo periodo (period_start) coincide con YYYY-MM
-    - last_3       : pagos en los últimos 3 días (incluye hoy)
-    - last_7       : pagos en los últimos 7 días (incluye hoy)
-    - userid       : limita a los pagos de ese usuario
-
-    Context -> {"payments": [{"full_name", "paid_at_label"}], "filter": <str>}
-    """
+    if is_member and userid != gym_user.id:
+        return redirect("app.home")
+    
     filt = (request.GET.get("filter") or "all").strip().lower()
-    userid = request.GET.get("userid")
-    period_str = request.GET.get("period")  # "YYYY-MM" cuando filter=period
+    period_str = request.GET.get("period")
+
 
     today = timezone.localdate()
 
-    # Base queryset
     qs = (
         Payment.objects
         .select_related("user")
