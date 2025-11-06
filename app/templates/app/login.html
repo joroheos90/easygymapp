@@ -11,38 +11,40 @@
         class="flex min-h-screen w-full flex-col items-center gap-14 bg-black/60 py-20"
     >
         <h1 class="text-[50px] font-extrabold text-white">Bienvenido</h1>
-        <div class="flex w-full flex-col gap-4 px-6 ">
-            <form method="post" class="font-roboto flex min-h-dvh flex-col gap-6">
-                {% csrf_token %}
-              
-                {% if form.non_field_errors %}
-                  <div class="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        <div class="flex w-full flex-col gap-4 px-6">
+            <form
+                method="post"
+                class="font-roboto flex min-h-dvh flex-col gap-6"
+            >
+                {% csrf_token %} {% if form.non_field_errors %}
+                <div class="rounded-lg bg-red-50 p-3 text-sm text-red-700">
                     {{ form.non_field_errors }}
-                  </div>
+                </div>
                 {% endif %}
-              
+
                 <div class="flex flex-col rounded-[8px] bg-black px-4">
-                  <label class="pt-3 text-sm font-medium">Número de miembro</label>
-                  {{ form.username|add_class:"w-full px-1 bg-black appearance-none text-white py-3 text-base ring-0 focus:ring-0 focus:outline-none" }}
+                    <label class="pt-3 text-sm font-medium"
+                        >Número de miembro</label
+                    >
+                    {{ form.username|add_class:"w-full px-1 bg-black
+                    appearance-none text-white py-3 text-base ring-0
+                    focus:ring-0 focus:outline-none" }}
                 </div>
-              
+
                 <div class="flex flex-col rounded-[8px] bg-white px-4">
-                  <label class="pt-3 text-sm font-medium">Contraseña</label>
-                  {{ form.password|add_class:"w-full px-1 py-3 text-base ring-0 focus:ring-0 focus:outline-none" }}
+                    <label class="pt-3 text-sm font-medium">Contraseña</label>
+                    {{ form.password|add_class:"w-full px-1 py-3 text-base
+                    ring-0 focus:ring-0 focus:outline-none" }}
                 </div>
-              
-                <button class="flex h-[56px] text-white w-full flex-col justify-center font-bold text-center items-center rounded-[12px] bg-black/90">
-                  Entrar
+
+                <button
+                    class="flex h-[56px] text-white w-full flex-col justify-center font-bold text-center items-center rounded-[12px] bg-black/90"
+                >
+                    Entrar
                 </button>
-              </form>
+            </form>
         </div>
     </div>
 </div>
 
 {% endblock %}
-
-
-
-
-
-
