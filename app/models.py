@@ -2,6 +2,23 @@ from django.db import models
 from django.utils import timezone
 from django.conf import settings
 
+class Gym(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    name = models.CharField(max_length=120)
+    address = models.CharField(max_length=200, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "gyms"
+        indexes = [
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["name"]),
+        ]
+
+    def __str__(self):
+        return self.name
 
 
 class GymUser(models.Model):
@@ -9,8 +26,10 @@ class GymUser(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="gym_profile",
-        null=False, blank=False,           # Fase 1: permitir nulos para poblar
+        null=False, blank=False,
     )
+    gym  = models.ForeignKey(Gym, on_delete=models.CASCADE, related_name="members",
+                             null=False, blank=False)
 
     class Role(models.TextChoices):
         ADMIN = "admin", "Admin"
@@ -19,7 +38,7 @@ class GymUser(models.Model):
     id = models.BigAutoField(primary_key=True)
     full_name = models.CharField(max_length=120)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.MEMBER)
-    join_date = models.DateField()               # ancla para calcular periodos
+    join_date = models.DateField()
     birth_date = models.DateField(null=True, blank=True)
     phone = models.CharField(max_length=32, null=True, blank=True)
     height_cm = models.CharField(max_length=5, null=True, blank=True)
@@ -30,13 +49,13 @@ class GymUser(models.Model):
     class Meta:
         db_table = "users"
         indexes = [
-            models.Index(fields=["is_active"]),
-            models.Index(fields=["join_date"]),
-            models.Index(fields=["phone"]),
+            models.Index(fields=["gym", "is_active"]),
+            models.Index(fields=["gym", "join_date"]),
+            models.Index(fields=["gym", "phone"]),
         ]
 
     def __str__(self):
-        return f"{self.id} {self.full_name} {self.user.id}".strip()
+        return f"[{self.gym_id}] {self.full_name} (u:{self.user_id})"
 
 
 class Payment(models.Model):
@@ -46,34 +65,40 @@ class Payment(models.Model):
         SINPE = "sinpe", "SINPE"
 
     id = models.BigAutoField(primary_key=True)
+    gym = models.ForeignKey(Gym, on_delete=models.CASCADE, related_name="payments",
+                            null=False, blank=False)  # <-- Fase 1: NULLABLE
     user = models.ForeignKey(GymUser, on_delete=models.CASCADE, related_name="payments")
     amount = models.PositiveIntegerField()
     method = models.CharField(max_length=20, choices=Method.choices)
     paid_at = models.DateTimeField(default=timezone.now)
 
     period_start = models.DateField()
-    period_end = models.DateField()                # recomendado: fin exclusivo
+    period_end = models.DateField()
     period_label = models.CharField(max_length=40, null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
 
     class Meta:
         db_table = "payments"
         constraints = [
-            models.CheckConstraint(check=models.Q(period_end__gt=models.F("period_start")),
-                                   name="payments_period_end_gt_start"),
+            models.CheckConstraint(
+                check=models.Q(period_end__gt=models.F("period_start")),
+                name="payments_period_end_gt_start",
+            ),
         ]
         indexes = [
-            models.Index(fields=["user", "period_start", "period_end"], name="idx_pay_user_period"),
-            models.Index(fields=["paid_at"]),
+            models.Index(fields=["gym", "user", "period_start", "period_end"], name="idx_pay_gym_user_period"),
+            models.Index(fields=["gym", "paid_at"]),
         ]
 
     def __str__(self):
-        return f"{self.user_id} {self.period_label or ''} {self.method}".strip()
+        return f"[{self.gym_id}] {self.user_id} {self.period_label or ''} {self.method}".strip()
 
 
 class BaseTimeslot(models.Model):
     id = models.BigAutoField(primary_key=True)
-    title = models.CharField(max_length=80)             # "6 am a 7 am"
+    gym = models.ForeignKey(Gym, on_delete=models.CASCADE, related_name="base_slots",
+                            null=False, blank=False)  # <-- Fase 1: NULLABLE
+    title = models.CharField(max_length=80)
     capacity = models.PositiveIntegerField()
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
@@ -81,9 +106,15 @@ class BaseTimeslot(models.Model):
 
     class Meta:
         db_table = "base_timeslots"
+        constraints = [
+            models.UniqueConstraint(fields=["gym", "title"], name="uniq_base_title_per_gym"),
+        ]
+        indexes = [
+            models.Index(fields=["gym", "is_active"]),
+        ]
 
     def __str__(self):
-        return self.title
+        return f"[{self.gym_id}] {self.title}"
 
 
 class DailyTimeslot(models.Model):
@@ -93,11 +124,13 @@ class DailyTimeslot(models.Model):
         CANCELLED = "cancelled", "Cancelled"
 
     id = models.BigAutoField(primary_key=True)
+    gym = models.ForeignKey(Gym, on_delete=models.CASCADE, related_name="daily_slots",
+                            null=False, blank=False)  # <-- Fase 1: NULLABLE
     slot_date = models.DateField()
     base = models.ForeignKey(
         BaseTimeslot, null=True, blank=True, on_delete=models.SET_NULL, related_name="instances"
     )
-    title = models.CharField(max_length=80)             # copia del base o personalizado
+    title = models.CharField(max_length=80)
     capacity = models.PositiveIntegerField()
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
     created_at = models.DateTimeField(default=timezone.now)
@@ -105,38 +138,41 @@ class DailyTimeslot(models.Model):
     class Meta:
         db_table = "daily_timeslots"
         constraints = [
-            models.UniqueConstraint(fields=["slot_date", "title"], name="uniq_daily_date_title"),
+            models.UniqueConstraint(fields=["gym", "slot_date", "title"], name="uniq_daily_date_title_per_gym"),
         ]
         indexes = [
-            models.Index(fields=["slot_date"]),
-            models.Index(fields=["status"]),
+            models.Index(fields=["gym", "slot_date"]),
+            models.Index(fields=["gym", "status"]),
         ]
 
     def __str__(self):
-        return f"{self.slot_date} {self.title}"
+        return f"[{self.gym_id}] {self.slot_date} {self.title}"
 
 
 class TimeslotSignup(models.Model):
     id = models.BigAutoField(primary_key=True)
+    gym = models.ForeignKey(Gym, on_delete=models.CASCADE, related_name="signups",
+                            null=False, blank=False)  # <-- Fase 1: NULLABLE
     daily_slot = models.ForeignKey(DailyTimeslot, on_delete=models.CASCADE, related_name="signups")
     user = models.ForeignKey(GymUser, on_delete=models.CASCADE, related_name="signups")
     signed_at = models.DateTimeField(default=timezone.now)
-    slot_date = models.DateField()  # denormalizado para reglas rápidas (1 por día, etc.)
+    slot_date = models.DateField()
 
     class Meta:
         db_table = "timeslot_signups"
         constraints = [
             models.UniqueConstraint(fields=["daily_slot", "user"], name="uniq_signup_slot_user"),
-            # Si NO quieres limitar a 1 horario por día, elimina esta línea:
-            models.UniqueConstraint(fields=["user", "slot_date"], name="uniq_signup_user_day"),
+            models.UniqueConstraint(fields=["gym", "user", "slot_date"], name="uniq_signup_user_day_per_gym"),
         ]
         indexes = [
-            models.Index(fields=["user", "slot_date"], name="idx_signup_user_date"),
+            models.Index(fields=["gym", "user", "slot_date"], name="idx_signup_gym_user_date"),
         ]
 
 
 class UserWeight(models.Model):
     id = models.BigAutoField(primary_key=True)
+    gym = models.ForeignKey(Gym, on_delete=models.CASCADE, related_name="weights",
+                            null=False, blank=False)  # <-- Fase 1: NULLABLE
     user = models.ForeignKey(GymUser, on_delete=models.CASCADE, related_name="weights")
     weight_kg = models.DecimalField(max_digits=5, decimal_places=2)
     recorded_at = models.DateTimeField(default=timezone.now)
@@ -144,5 +180,5 @@ class UserWeight(models.Model):
     class Meta:
         db_table = "user_weights"
         indexes = [
-            models.Index(fields=["user", "recorded_at"]),
+            models.Index(fields=["gym", "user", "recorded_at"]),
         ]

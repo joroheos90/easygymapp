@@ -1,6 +1,7 @@
 from django.contrib import admin
-from app.models import GymUser, Payment, BaseTimeslot, DailyTimeslot, TimeslotSignup, UserWeight
+from app.models import Gym, GymUser, Payment, BaseTimeslot, DailyTimeslot, TimeslotSignup, UserWeight
 
+admin.site.register(Gym)
 admin.site.register(GymUser)
 admin.site.register(Payment)
 admin.site.register(BaseTimeslot)
