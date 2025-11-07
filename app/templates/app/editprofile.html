@@ -61,6 +61,14 @@
                     type="date"
                     name="birth_date"
                     value="{{ birth_date }}"
+                    style="
+                        padding-left: 28px;
+                        padding-top: 12px;
+                        padding-bottom: 12px;
+                        height: 48px;
+                        min-height: 48px;
+                        line-height: 24px;
+                    "
                     class="w-full pl-7 py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
                     placeholder="Fecha de nacimiento"
                 />
@@ -83,6 +91,14 @@
                     type="date"
                     name="join_date"
                     value="{{join_date}}"
+                    style="
+                        padding-left: 28px;
+                        padding-top: 12px;
+                        padding-bottom: 12px;
+                        height: 48px;
+                        min-height: 48px;
+                        line-height: 24px;
+                    "
                     {% if is_member %}disabled{% endif %}
                     class="w-full py-3 disabled:bg-gray-200 disabled:text-gray-400 pl-11 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
                 />
