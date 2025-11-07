@@ -32,10 +32,21 @@ def role_required(roles: Iterable[str], forbid: bool = False):
                     return redirect("app.home")
                 return redirect("app.home")
             request.gym_user = gu
+            request.user_id = gu.id
+            request.is_admin = (gu.role == "admin")
+            request.is_member = (gu.role == "member")
             return view_func(request, *args, **kwargs)
         return _wrapped
     return decorator
 
+def gym_required(view):
+    @wraps(view)
+    def _w(request, *args, **kwargs):
+        if not getattr(request, "gym", None):
+            # redirige a selección de gym
+            return redirect("app.home")
+        return view(request, *args, **kwargs)
+    return _w
 
 # -----------------------------
 # Formatting helpers

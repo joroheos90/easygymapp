@@ -2,7 +2,7 @@
 {{is_edit|yesno:"Editar Miembro,Nuevo Miembro" }}{% endblock %} 
 {% block headerTitle %}Perfil{% endblock %} {% block headerButtons %}
 <a
-    href="{% if is_edit %}{% url 'app.profile' %}?userid={{ userid }}{% else %}{% url 'app.users' %}{% endif %}"
+    href="{% if request.is_member %}{% url 'app.profile' %}{% else %}{% url 'app.users' %}{% endif %}"
     class="cursor-pointer text-lg font-normal text-blue-500"
     >Cancelar</a
 >
@@ -92,7 +92,7 @@
                     name="join_date"
                     value="{{join_date}}"
                     style="
-                        padding-left: 28px;
+                        padding-left: 44px;
                         padding-top: 12px;
                         padding-bottom: 12px;
                         height: 48px;

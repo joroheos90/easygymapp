@@ -1,163 +1,230 @@
-{% extends "app/base.html" %}
-{% block title %}Horarios{% endblock %}
-{% block headerTitle %}Horarios{% endblock %}
-
-{% block headerButtons %}
-<a href="{% url 'app.profile' %}?userid={{gym_profile.id}}" class="cursor-pointer text-lg font-normal">
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/>
-  </svg>
+{% extends "app/base.html" %} {% block title %}Horarios{% endblock %} 
+{% block headerTitle %}Horarios{% endblock %} {% block headerButtons %}
+<a href="{% url 'app.profile' %}" class="cursor-pointer text-lg font-normal">
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="size-6"
+    >
+        <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M15.75 19.5 8.25 12l7.5-7.5"
+        />
+    </svg>
 </a>
-{% endblock %}
-
-{% block content %}
+{% endblock %} {% block content %}
 <div class="flex flex-col gap-6 relative p-4 py-6 font-roboto">
-    {% if messages %}
-    {% for m in messages %}
-      {% if m.tags == 'error' %}
-        <div class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-red-600 p-4 text-center text-base font-bold text-white">
-          {{ m }}
-        </div>
-      {% elif m.tags == 'success' %}
-        <div class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-green-600 p-4 text-center text-base font-bold text-white">
-          {{ m }}
-        </div>
-      {% endif %}
-    {% endfor %}
-  {% endif %}
-  
+    {% if messages %} {% for m in messages %} {% if m.tags == 'error' %}
+    <div
+        class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-red-600 p-4 text-center text-base font-bold text-white"
+    >
+        {{ m }}
+    </div>
+    {% elif m.tags == 'success' %}
+    <div
+        class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-green-600 p-4 text-center text-base font-bold text-white"
+    >
+        {{ m }}
+    </div>
+    {% endif %} {% endfor %} {% endif %}
 
-  <div class="flex flex-row items-center justify-between">
-    <a class="px-4" href="?date={{ prev_date }}">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/>
-      </svg>
-    </a>
-    <h1 class="mx-auto text-lg font-semibold">{{ date }}</h1>
-    <a class="px-4" href="?date={{ next_date }}">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
-        <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/>
-      </svg>
-    </a>
-  </div>
-
-  <form id="slot-form" method="post" class="flex flex-col gap-4 rounded-[24px] bg-white">
-    {% csrf_token %}
-    <input type="hidden" name="slot_id" id="slot_id" />
-    <input type="hidden" name="date" value="{{ raw_date|default_if_none:'' }}" />
-
-    <div class="flex flex-col gap-4 p-4">
-      <div class="flex flex-col gap-4">
-        <h2 class="text-sm text-gray-500">Selecciona un horario</h2>
-
-        {% for hour in hours %}
-        <label class="flex cursor-pointer flex-row gap-2 items-center" data-slot-id="{{ hour.id }}">
-          <div class="relative flex w-fit items-center justify-center">
-            <input
-              type="radio"
-              name="hour"
-              value="{{ hour.id }}"
-              {% if hour.is_mine %}checked{% endif %}
-              class="peer h-6 w-6 appearance-none rounded-full border border-black bg-white checked:bg-green-500"
-              data-enrolled="{{ hour.enrolled }}"
-              data-capacity="{{ hour.capacity }}"
-              data-bar-id="bar-{{ hour.id }}"
-            />
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
-                 class="absolute size-4 {% if hour.is_mine %}flex{% else %}hidden peer-checked:flex{% endif %}">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/>
+    <div class="flex flex-row items-center justify-between">
+        <a class="px-4" href="?date={{ prev_date }}">
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="size-4"
+            >
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M15.75 19.5 8.25 12l7.5-7.5"
+                />
             </svg>
-          </div>
-
-          <div class="flex w-full flex-col gap-2">
-            <div class="flex flex-row items-center justify-between">
-              <span class="text-sm font-medium">{{ hour.title }}</span>
-              <span class="text-xs text-gray-500">
-                <span id="count-{{ hour.id }}">{{ hour.enrolled }}</span>/<span>{{ hour.capacity }}</span>
-              </span>
-            </div>
-
-            <div class="h-2 w-full rounded-full bg-gray-300">
-              <div id="bar-{{ hour.id }}"
-                   class="h-full rounded-full {% if hour.occupancy_pct == 100 %}bg-red-500{% else %}bg-green-500{% endif %}"
-                   style="width: {{ hour.occupancy_width }};">
-              </div>
-            </div>
-          </div>
-        </label>
-        {% endfor %}
-      </div>
+        </a>
+        <h1 class="mx-auto text-lg font-semibold">{{ date }}</h1>
+        <a class="px-4" href="?date={{ next_date }}">
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="size-4"
+            >
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="m8.25 4.5 7.5 7.5-7.5 7.5"
+                />
+            </svg>
+        </a>
     </div>
 
-    <div class="flex justify-center border-t border-gray-300 py-2.5">
-      <a href="{% url 'app.hours' %}" class="cursor-pointer text-sm font-normal text-blue-500">Ver Horarios</a>
-    </div>
-  </form>
+    <form
+        id="slot-form"
+        method="post"
+        class="flex flex-col gap-4 rounded-[24px] bg-white"
+    >
+        {% csrf_token %}
+        <input type="hidden" name="slot_id" id="slot_id" />
+        <input
+            type="hidden"
+            name="date"
+            value="{{ raw_date|default_if_none:'' }}"
+        />
+
+        <div class="flex flex-col gap-4 p-4">
+            <div class="flex flex-col gap-4">
+                <h2 class="text-sm text-gray-500">Selecciona un horario</h2>
+
+                {% for hour in hours %}
+                <label
+                    class="flex cursor-pointer flex-row gap-2 items-center"
+                    data-slot-id="{{ hour.id }}"
+                >
+                    <div
+                        class="relative flex w-fit items-center justify-center"
+                    >
+                        <input
+                            type="radio"
+                            name="hour"
+                            value="{{ hour.id }}"
+                            {% if hour.is_mine%}checked{%endif%}
+                            class="peer h-6 w-6 appearance-none rounded-full border border-black bg-white checked:bg-green-500"
+                            data-enrolled="{{ hour.enrolled }}"
+                            data-capacity="{{ hour.capacity }}"
+                            data-bar-id="bar-{{ hour.id }}"
+                        />
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.5"
+                            stroke="currentColor"
+                            class="absolute size-4 {% if hour.is_mine %}flex{% else %}hidden peer-checked:flex{% endif %}"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="m4.5 12.75 6 6 9-13.5"
+                            />
+                        </svg>
+                    </div>
+
+                    <div class="flex w-full flex-col gap-2">
+                        <div class="flex flex-row items-center justify-between">
+                            <span class="text-sm font-medium"
+                                >{{ hour.title }}</span
+                            >
+                            <span class="text-xs text-gray-500">
+                                <span id="count-{{ hour.id }}"
+                                    >{{ hour.enrolled }}</span
+                                >/<span>{{ hour.capacity }}</span>
+                            </span>
+                        </div>
+
+                        <div class="h-2 w-full rounded-full bg-gray-300">
+                            <div
+                                id="bar-{{ hour.id }}"
+                                class="h-full rounded-full {% if hour.occupancy_pct == 100 %}bg-red-500{% else %}bg-green-500{% endif %}"
+                                style="width: {{ hour.occupancy_width }};"
+                            ></div>
+                        </div>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+    </form>
 </div>
 
 <script>
-(function () {
-  const form   = document.getElementById('slot-form');
-  const hidden = document.getElementById('slot_id');
-  if (!form || !hidden) return;
+    (function () {
+        const form = document.getElementById("slot-form");
+        const hidden = document.getElementById("slot_id");
+        if (!form || !hidden) return;
 
-  // Click en el MISMO radio ya seleccionado => cancelar inscripción
-  form.addEventListener('mousedown', function (e) {
-    const label = e.target.closest('label[data-slot-id]');
-    if (!label) return;
-    const input = label.querySelector('input[name="hour"]');
-    if (!input) return;
+        form.addEventListener("mousedown", function (e) {
+            const label = e.target.closest("label[data-slot-id]");
+            if (!label) return;
+            const input = label.querySelector('input[name="hour"]');
+            if (!input) return;
 
-    if (input.checked) {
-      e.preventDefault(); // evita que el radio cambie antes de enviar
-      const slotId   = input.value;
-      const enrolled = parseInt(input.dataset.enrolled || '0', 10);
-      const capacity = parseInt(input.dataset.capacity || '0', 10);
-      const barId    = input.dataset.barId;
+            if (input.checked) {
+                e.preventDefault(); // evita que el radio cambie antes de enviar
+                const slotId = input.value;
+                const enrolled = parseInt(input.dataset.enrolled || "0", 10);
+                const capacity = parseInt(input.dataset.capacity || "0", 10);
+                const barId = input.dataset.barId;
 
-      // preview: cancelar => -1
-      const previewEnrolled = Math.max(enrolled - 1, 0);
-      const pct = capacity > 0 ? Math.min(Math.round((previewEnrolled / capacity) * 100), 100) : 0;
+                // preview: cancelar => -1
+                const previewEnrolled = Math.max(enrolled - 1, 0);
+                const pct =
+                    capacity > 0
+                        ? Math.min(
+                              Math.round((previewEnrolled / capacity) * 100),
+                              100
+                          )
+                        : 0;
 
-      const bar   = document.getElementById(barId);
-      const count = document.getElementById('count-' + slotId);
-      if (bar) {
-        bar.style.width = pct + '%';
-        bar.className = 'h-full rounded-full ' + (pct >= 100 ? 'bg-red-500' : 'bg-green-500');
-      }
-      if (count) count.textContent = String(previewEnrolled);
+                const bar = document.getElementById(barId);
+                const count = document.getElementById("count-" + slotId);
+                if (bar) {
+                    bar.style.width = pct + "%";
+                    bar.className =
+                        "h-full rounded-full " +
+                        (pct >= 100 ? "bg-red-500" : "bg-green-500");
+                }
+                if (count) count.textContent = String(previewEnrolled);
 
-      hidden.value = slotId;
-      setTimeout(() => form.submit(), 120);
-    }
-  });
+                hidden.value = slotId;
+                setTimeout(() => form.submit(), 120);
+            }
+        });
 
-  // Selección de radio DIFERENTE => inscribirse / moverse
-  form.addEventListener('change', function (e) {
-    const input = e.target.closest('input[name="hour"]');
-    if (!input) return;
+        // Selección de radio DIFERENTE => inscribirse / moverse
+        form.addEventListener("change", function (e) {
+            const input = e.target.closest('input[name="hour"]');
+            if (!input) return;
 
-    const slotId   = input.value;
-    const enrolled = parseInt(input.dataset.enrolled || '0', 10);
-    const capacity = parseInt(input.dataset.capacity || '0', 10);
-    const barId    = input.dataset.barId;
+            const slotId = input.value;
+            const enrolled = parseInt(input.dataset.enrolled || "0", 10);
+            const capacity = parseInt(input.dataset.capacity || "0", 10);
+            const barId = input.dataset.barId;
 
-    // preview: +1 si hay cupo
-    const previewEnrolled = (capacity > 0 && enrolled < capacity) ? enrolled + 1 : enrolled;
-    const pct = capacity > 0 ? Math.min(Math.round((previewEnrolled / capacity) * 100), 100) : 0;
+            // preview: +1 si hay cupo
+            const previewEnrolled =
+                capacity > 0 && enrolled < capacity ? enrolled + 1 : enrolled;
+            const pct =
+                capacity > 0
+                    ? Math.min(
+                          Math.round((previewEnrolled / capacity) * 100),
+                          100
+                      )
+                    : 0;
 
-    const bar   = document.getElementById(barId);
-    const count = document.getElementById('count-' + slotId);
-    if (bar) {
-      bar.style.width = pct + '%';
-      bar.className = 'h-full rounded-full ' + (pct >= 100 ? 'bg-red-500' : 'bg-green-500');
-    }
-    if (count) count.textContent = String(previewEnrolled);
+            const bar = document.getElementById(barId);
+            const count = document.getElementById("count-" + slotId);
+            if (bar) {
+                bar.style.width = pct + "%";
+                bar.className =
+                    "h-full rounded-full " +
+                    (pct >= 100 ? "bg-red-500" : "bg-green-500");
+            }
+            if (count) count.textContent = String(previewEnrolled);
 
-    hidden.value = slotId;
-    setTimeout(() => form.submit(), 120);
-  });
-})();
+            hidden.value = slotId;
+            setTimeout(() => form.submit(), 120);
+        });
+    })();
 </script>
 
 {% endblock %}

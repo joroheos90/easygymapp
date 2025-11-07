@@ -4,6 +4,7 @@ from .helpers import (
     signed_at_parts,
     format_es_date,
     role_required,
+    gym_required,
 )
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -14,37 +15,61 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.http import HttpResponseBadRequest
 from datetime import date, timedelta
-from .models import DailyTimeslot, GymUser, BaseTimeslot, Payment, TimeslotSignup
+from .models import Gym, DailyTimeslot, GymUser, BaseTimeslot, Payment, TimeslotSignup
 from dateutil.relativedelta import relativedelta
 from django.db.models import Max, Sum, Count
 from calendar import monthrange
 from django.db import transaction
 from django.views.decorators.http import require_http_methods
-
-from app.models import GymUser
 from app.services import GymService
+from django.contrib.auth.views import LoginView, PasswordChangeView
+from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
+from django.contrib.auth import logout
+from django.urls import reverse_lazy
+
 
 
 @login_required
-def index(request):
-    return render(request, "app/home.html")
+@require_http_methods(["GET", "POST"])
+def home(request):
+    if request.method == "POST":
+        gym_id = request.POST.get("gym_id")
+        gym = get_object_or_404(Gym, pk=gym_id, is_active=True)
+
+        request.session["gym_id"] = str(gym.id)
+        gp = getattr(request.user, "gym_profile", None)
+
+        if gp and getattr(gp, "role", "") == "admin":
+            return redirect("app.admin")
+        else:
+            if gp and gp.id:
+                profile_url = reverse("app.profile")
+                return redirect(f"{profile_url}")
+            else:
+                return redirect("app.home")
+
+    gyms = Gym.objects.filter(is_active=True).only("id", "name", "address").order_by("name")
+    selected_id = getattr(getattr(request, "gym", None), "id", None)
+    return render(request, "app/home.html", {"gyms": gyms, "selected_gym_id": selected_id})
 
 @login_required
 @role_required(["admin"])
+@gym_required
 def admin(request):
     today = timezone.localdate()
 
-    active_members = GymUser.objects.filter(is_active=True).count()
+    active_members = GymUser.objects.filter(gym=request.gym, is_active=True).count()
 
     qs = Payment.objects.all()
-    qs = qs.filter(period_start__lte=today, period_end__gt=today)
+    qs = qs.filter(gym=request.gym, period_start__lte=today, period_end__gt=today)
 
     period_income = qs.aggregate(total=Sum("amount"))["total"] or 0
 
     ctx = {
         "active_members": active_members,
         "period_income": period_income,
-        "period_label": _period_label(today.year, today.month)
+        "period_label": _period_label(today.year, today.month),
+        "gym_name": request.gym.name
     }
     return render(request, "app/admin.html", ctx)
 
@@ -52,6 +77,7 @@ def admin(request):
 @login_required
 @role_required(["admin"])
 @require_http_methods(["GET", "POST"])
+@gym_required
 def base_hours(request):
 
     tomorrow = timezone.localdate() + timedelta(days=1)
@@ -60,13 +86,14 @@ def base_hours(request):
         created = 0
         skipped = 0
 
-        base_qs = BaseTimeslot.objects.only("id", "title", "capacity", "is_active").filter(is_active=True)
+        base_qs = BaseTimeslot.objects.only("id", "title", "capacity", "is_active").filter(gym=request.gym, is_active=True)
 
         with transaction.atomic():
             for b in base_qs:
                 obj, made = DailyTimeslot.objects.get_or_create(
                     base=b,
                     slot_date=tomorrow,
+                    gym=request.gym,
                     defaults={
                         "title": b.title,
                         "capacity": b.capacity,
@@ -78,11 +105,11 @@ def base_hours(request):
                 else:
                     skipped += 1
 
-        # Redirige para evitar reenvío del form (PRG)
         return redirect("app.base_hours")
 
     qs = (
         BaseTimeslot.objects
+        .filter(gym=request.gym, is_active=True)
         .only("id", "title", "capacity", "is_active")
         .order_by("id")
     )
@@ -98,7 +125,7 @@ def base_hours(request):
         for h in qs
     ]
 
-    already_created = DailyTimeslot.objects.filter(slot_date=tomorrow).exists()
+    already_created = DailyTimeslot.objects.filter(gym=request.gym, slot_date=tomorrow).exists()
     ctx = {
         "hours": hours,
         "tomorrow": tomorrow, 
@@ -110,10 +137,9 @@ def base_hours(request):
 @login_required
 @role_required(["member"])
 @require_http_methods(["GET", "POST"])
+@gym_required
 def selector(request):
     q = request.GET.get("date") or request.POST.get("date")
-    gym_user = getattr(request, "gym_user", None)
-
     day = parse_date(q) if q else None
     if day is None:
         day = timezone.localdate()
@@ -121,63 +147,60 @@ def selector(request):
     error = None
     success = None
 
-
     if request.method == "POST":
-        if not gym_user:
-            error = "No autorizado."
+        slot_id_raw = request.POST.get("slot_id")
+        try:
+            slot_id = int(slot_id_raw)
+        except (TypeError, ValueError):
+            slot_id = None
+
+        if not slot_id:
+            error = "Horario inválido."
         else:
-            slot_id_raw = request.POST.get("slot_id")
-            try:
-                slot_id = int(slot_id_raw)
-            except (TypeError, ValueError):
-                slot_id = None
+            slot = get_object_or_404(DailyTimeslot, pk=slot_id)
 
-            if not slot_id:
-                error = "Horario inválido."
-            else:
-                slot = get_object_or_404(DailyTimeslot, pk=slot_id)
+            if slot.slot_date != day:
+                day = slot.slot_date
 
-                if slot.slot_date != day:
-                    day = slot.slot_date
+            with transaction.atomic():
+                existing = (
+                    TimeslotSignup.objects
+                    .select_for_update()
+                    .filter(gym=request.gym, user=request.gym_user, slot_date=day)
+                    .first()
+                )
 
-                with transaction.atomic():
-                    existing = (
-                        TimeslotSignup.objects
-                        .select_for_update()
-                        .filter(user=gym_user, slot_date=day)
-                        .first()
-                    )
-
-                    if existing and existing.daily_slot_id == slot.id:
-                        # Seleccionó el mismo -> CANCELAR su participación
-                        existing.delete()
-                        success = f"Se canceló tu inscripción en «{slot.title}» para hoy."
+                if existing and existing.daily_slot_id == slot.id:
+                    # Seleccionó el mismo -> CANCELAR su participación
+                    existing.delete()
+                    success = f"Se canceló tu inscripción en «{slot.title}» para hoy."
+                else:
+                    # Cambiar (o crear) inscripción -> validar pago y cupo
+                    ps, pe = _current_period_for(request.gym_user, ref=timezone.localdate())
+                    has_paid = Payment.objects.filter(
+                        gym=request.gym, user=request.gym_user, period_start__lte=ps, period_end__gte=pe
+                    ).exists()
+                    if not has_paid:
+                        error = "Debes tener tu pago al día para inscribirte."
                     else:
-                        # Cambiar (o crear) inscripción -> validar pago y cupo
-                        ps, pe = _current_period_for(gym_user, ref=timezone.localdate())
-                        has_paid = Payment.objects.filter(
-                            user=gym_user, period_start__lte=ps, period_end__gte=pe
-                        ).exists()
-                        if not has_paid:
-                            error = "Debes tener tu pago al día para inscribirte."
+                        # Cupo del destino
+                        enrolled = TimeslotSignup.objects.filter(daily_slot=slot).count()
+                        cap = slot.capacity or 0
+                        if enrolled >= cap:
+                            error = "Este horario ya está lleno."
                         else:
-                            # Cupo del destino
-                            enrolled = TimeslotSignup.objects.filter(daily_slot=slot).count()
-                            cap = slot.capacity or 0
-                            if enrolled >= cap:
-                                error = "Este horario ya está lleno."
-                            else:
-                                # Si estaba inscrito en otro horario del mismo día, borra primero
-                                if existing:
-                                    existing.delete()
-                                # Crea la nueva inscripción
-                                TimeslotSignup.objects.create(
-                                    daily_slot=slot,
-                                    user=gym_user,
-                                    slot_date=slot.slot_date,   # NOT NULL
-                                    signed_at=timezone.now(),
-                                )
-                                success = f"Inscripción registrada en «{slot.title}»."
+                            # Si estaba inscrito en otro horario del mismo día, borra primero
+                            if existing:
+                                existing.delete()
+                            # Crea la nueva inscripción
+                            TimeslotSignup.objects.create(
+                                gym=request.gym,
+                                daily_slot=slot,
+                                user=request.gym_user,
+                                slot_date=slot.slot_date,   # NOT NULL
+                                signed_at=timezone.now(),
+                            )
+                            success = f"Inscripción registrada en «{slot.title}»."
 
         if error:
             messages.error(request, error)
@@ -190,16 +213,15 @@ def selector(request):
     next_day = day + timedelta(days=1)
 
     my_slot_ids = set()
-    if gym_user:
-        my_slot_ids = set(
-            TimeslotSignup.objects
-            .filter(user=gym_user, slot_date=day)
-            .values_list("daily_slot_id", flat=True)
-        )
+    my_slot_ids = set(
+        TimeslotSignup.objects
+        .filter(gym=request.gym, user=request.gym_user, slot_date=day)
+        .values_list("daily_slot_id", flat=True)
+    )
 
     slots = (
         DailyTimeslot.objects
-        .filter(slot_date=day)
+        .filter(gym=request.gym, slot_date=day)
         .annotate(enrolled=Count("signups"))
         .order_by("title")
         .only("id", "slot_date", "title", "capacity", "status")
@@ -247,17 +269,16 @@ def _current_period_for(user: GymUser, ref: date | None = None) -> tuple[date, d
     end = start + relativedelta(months=1)  # exclusivo
     return start, end
 
-
 @login_required
 @role_required(["admin"])
+@gym_required
 def users(request):
     filt = (request.GET.get("filter") or "all").strip().lower()
     delinquent_days = int(request.GET.get("days") or 30)
-
     today = timezone.localdate()
     qs = (
         GymUser.objects
-        .filter(is_active=True, role="member")
+        .filter(gym=request.gym, is_active=True, role="member")
         .only("id", "full_name", "join_date")
         .order_by("full_name")
     )
@@ -265,7 +286,7 @@ def users(request):
     out = []
     for u in qs:
         ps, pe = _current_period_for(u, ref=today)
-        paid = Payment.objects.filter(
+        paid = Payment.objects.filter(gym=request.gym,
             user=u, period_start__lte=ps, period_end__gte=pe
         ).exists()
 
@@ -305,8 +326,13 @@ def users(request):
 
 
 @login_required
+@gym_required
+@role_required(["admin", "member"])
 def profile(request):
-    raw = request.GET.get("userid")
+    if request.is_member:
+        raw = request.user_id
+    else:
+        raw = request.GET.get("userid")
     if not raw:
         return HttpResponseBadRequest("Falta el parámetro ?userid")
 
@@ -316,7 +342,7 @@ def profile(request):
         return HttpResponseBadRequest("userid inválido")
 
     user = get_object_or_404(
-        GymUser.objects.prefetch_related(
+        GymUser.objects.filter(gym=request.gym).prefetch_related(
             "weights",
         ).only(
             "id", "full_name", "role", "join_date", "birth_date", "phone",
@@ -337,7 +363,7 @@ def profile(request):
 
     ps, pe = _current_period_for(user)
     has_paid = Payment.objects.filter(
-        user=user, period_start__lte=ps, period_end__gte=pe
+        gym=request.gym, user=user, period_start__lte=ps, period_end__gte=pe
     ).exists()
 
     last_payment = (
@@ -382,6 +408,7 @@ def profile(request):
 
 @login_required
 @role_required(["admin"])
+@gym_required
 def hours(request):
     q = request.GET.get("date")
     day = parse_date(q) if q else None
@@ -393,7 +420,7 @@ def hours(request):
 
     slots = (
         DailyTimeslot.objects
-        .filter(slot_date=day)
+        .filter(gym=request.gym, slot_date=day)
         .order_by("title")
         .prefetch_related("signups__user")
     )
@@ -427,10 +454,12 @@ def hours(request):
 
 @login_required
 @role_required(["member", "admin"])
-def edit(request):
-    raw = request.GET.get("userid")
-    gym_user = request.gym_user
-    is_admin = (gym_user.role == "admin")
+@gym_required
+def user(request):
+    if request.is_member:
+        raw = request.user_id
+    else:
+        raw = request.GET.get("userid")
     member = None
     if raw:
         try:
@@ -439,10 +468,10 @@ def edit(request):
             return HttpResponseBadRequest("userid inválido")
         member = get_object_or_404(GymUser, pk=member_id)
 
-    if not is_admin:
+    if not request.is_admin:
         if member is None:
             return redirect("app.home")
-        if member.id != gym_user.id:
+        if member.id != request.user_id:
             return redirect("app.home")
 
 
@@ -467,13 +496,13 @@ def edit(request):
 
         if member is None:
             # Crear GymUser + auth.User (OneToOne) con password por defecto
-            member, auth_u = GymService.crear_gymuser_y_user(full_name=full_name, is_active=is_active, password="gim12345")
+            member, auth_u = GymService.crear_gymuser_y_user(gym=request.gym, full_name=full_name, is_active=is_active, password="gim12345")
             # Completar/ajustar campos del perfil recién creado
             member.phone = phone
             member.birth_date = birth_date
             member.join_date = join_date
             member.height_cm = height_cm
-            member.save(update_fields=["phone", "birth_date", "join_date", "height_cm", "updated_at"])
+            member.save(update_fields=["phone", "birth_date", "join_date", "height_cm", "updated_at", "gym_id"])
         else:
             # Update GymUser
             member.full_name  = full_name
@@ -566,14 +595,8 @@ def _period_options(n: int = 6) -> list[tuple[str, str]]:
 
 @login_required
 @role_required(["admin"])
+@gym_required
 def payment(request):
-    """
-    GET:
-      - Nuevo: /pago/
-      - Editar: /pago/?paymentid=<id>
-    POST:
-      - Crea o actualiza y redirige a home (si edit, añade ?pagoid=)
-    """
     pagoid = request.GET.get("paymentid") or request.POST.get("paymentid")
     pref_user_id = request.GET.get("userid") or request.POST.get("userid")
 
@@ -595,7 +618,7 @@ def payment(request):
         # Validaciones mínimas (frontend hará la UX)
         if not user_id or not period_v or not paid_at_s or not method:
             # Re-render simple con error
-            ctx = _pago_context(is_edit, pagoid, payment, pref_user_id)
+            ctx = _pago_context(request.gym, is_edit, pagoid, payment, pref_user_id)
             ctx.update({"error": "Faltan campos obligatorios.",})
             return render(request, "app/payment.html", ctx)
 
@@ -606,7 +629,7 @@ def payment(request):
             y, m, d = map(int, paid_at_s.split("-"))
             paid_at = date(y, m, d)
         except Exception:
-            ctx = _pago_context(is_edit, pagoid, payment)
+            ctx = _pago_context(request.gym, is_edit, pagoid, payment)
             ctx.update({"error": "Fecha de pago inválida."})
             return render(request, "app/payment.html", ctx)
 
@@ -614,7 +637,7 @@ def payment(request):
         try:
             py, pm = map(int, period_v.split("-"))
         except Exception:
-            ctx = _pago_context(is_edit, pagoid, payment)
+            ctx = _pago_context(request.gym, is_edit, pagoid, payment)
             ctx.update({"error": "Periodo inválido."})
             return render(request, "app/payment.html", ctx)
 
@@ -638,9 +661,10 @@ def payment(request):
             if pref_user_id:
                 return redirect(f"{reverse('app.payments')}?userid={pref_user_id}")
             else:
-                return redirect("app.home")
+                return redirect("app.payments")
         else:
             p = Payment.objects.create(
+                gym=request.gym,
                 user=user,
                 amount=amount,
                 method=method,
@@ -653,16 +677,16 @@ def payment(request):
             if pref_user_id:
                 return redirect(f"{reverse('app.payments')}?userid={pref_user_id}")
             else:
-                return redirect("app.home")
+                return redirect("app.payments")
 
     # GET
-    ctx = _pago_context(is_edit, pagoid, payment, pref_user_id)
+    ctx = _pago_context(request.gym, is_edit, pagoid, payment, pref_user_id)
     return render(request, "app/payment.html", ctx)
 
 
-def _pago_context(is_edit: bool, pagoid: str | None, payment: Payment | None, pref_user_id: str | None = None):
+def _pago_context(gym, is_edit: bool, pagoid: str | None, payment: Payment | None, pref_user_id: str | None = None):
     """Contexto común para el template."""
-    users = GymUser.objects.filter(is_active=True).only("id", "full_name").order_by("full_name")
+    users = GymUser.objects.filter(gym=gym, is_active=True).only("id", "full_name").order_by("full_name")
     methods = METHOD_CHOICES
     periods = _period_options(2)
 
@@ -698,17 +722,17 @@ def _pago_context(is_edit: bool, pagoid: str | None, payment: Payment | None, pr
 
 @login_required
 @role_required(["member", "admin"])
+@gym_required
 def payments(request):
-    gym_user = request.gym_user
-    is_member = (gym_user.role == "member")
-    raw = request.GET.get("userid")
+    if request.is_member:
+        raw = request.user_id
+    else:
+        raw = request.GET.get("userid")
+
     try:
         userid = int(raw) if raw is not None else None
     except (TypeError, ValueError):
         userid = None
-
-    if is_member and userid != gym_user.id:
-        return redirect("app.home")
     
     filt = (request.GET.get("filter") or "all").strip().lower()
     period_str = request.GET.get("period")
@@ -718,6 +742,7 @@ def payments(request):
 
     qs = (
         Payment.objects
+        .filter(gym=request.gym)
         .select_related("user")
         .only("id", "paid_at", "period_start", "period_end", "period_label", "method", "amount", "user__id", "user__full_name")
     )
@@ -771,13 +796,6 @@ def payments(request):
         "period": period_str or "",
         "user_id": userid or "",
     })
-
-# app/views.py
-from django.contrib.auth.views import LoginView, PasswordChangeView
-from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
-from django.contrib.auth import logout
-from django.shortcuts import redirect
-from django.urls import reverse_lazy
 
 # --- Custom Auth Form: solo para renombrar el label de username ---
 class MemberLoginForm(AuthenticationForm):

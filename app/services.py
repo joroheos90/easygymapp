@@ -79,7 +79,7 @@ class SlotStatus:
 # ---------- Service ----------
 class GymService:
     @transaction.atomic
-    def crear_gymuser_y_user(full_name: str, is_active: bool = True, password: str = "gim12345"):
+    def crear_gymuser_y_user(gym, full_name: str, is_active: bool = True, password: str = "gim12345"):
         UserModel = get_user_model()
 
         # 1) Crear auth.User con username temporal único
@@ -93,6 +93,7 @@ class GymService:
 
         # 2) Crear GymUser ENLAZADO (evita NOT NULL)
         g = GymUser.objects.create(
+            gym=gym,
             user=u,
             full_name=full_name or "Sin nombre",
             role="member",

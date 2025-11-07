@@ -1,5 +1,5 @@
 {% extends "app/base.html" %} {% load customfilters %} 
-{% block title %}Functional Training{% endblock %} {% block headerTitle %}Functional Training{% endblock %} {% block headerButtons %}
+{% block title %}{{gym_name}}{% endblock %} {% block headerTitle %}{{gym_name}}{% endblock %} {% block headerButtons %}
 <a href="{% url 'app.home' %}" class="cursor-pointer text-lg font-normal">
     <svg
         xmlns="http://www.w3.org/2000/svg"

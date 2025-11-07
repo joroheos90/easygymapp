@@ -2,7 +2,7 @@
 {{is_edit|yesno:"Editar Pago,Nuevo Pago" }}{% endblock %} 
 {% block headerTitle %}Pago{% endblock %} {% block headerButtons %}
 <a
-    href="{% if user_id %}{% url 'app.profile' %}?userid={{ user_id }}{% elif payment_id %}{% url 'app.payments' %}{% else %}{% url 'app.admin' %}{% endif %}"
+    href="{% if request.is_member %}{% url 'app.profile' %}{% elif payment_id %}{% url 'app.payments' %}{% else %}{% url 'app.admin' %}{% endif %}"
     class="cursor-pointer text-lg font-normal text-blue-500"
     >Cancelar</a
 >
@@ -15,6 +15,13 @@
     method="post"
     class="flex flex-col gap-6 px-4 py-6 pb-6 font-roboto"
 >
+    {% if error %}
+        <div
+            class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-red-600 p-4 text-center text-base font-bold text-white"
+        >
+            {{error}}
+        </div>
+    {% endif %}
     {% csrf_token %}
 
     {% if is_edit %}

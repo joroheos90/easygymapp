@@ -14,9 +14,9 @@ urlpatterns = [
     path("selector", views.selector, name="app.selector"),
 
     #shared
-    path("", views.index, name="app.home"),
+    path("", views.home, name="app.home"),
     path("profile", views.profile, name="app.profile"),
-    path("edit", views.edit, name="app.edit"),
+    path("user", views.user, name="app.edit"),
     path("payments", views.payments, name="app.payments"),
     
     #auth
