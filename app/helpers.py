@@ -70,26 +70,39 @@ MONTHS_ES = [
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ]
 
-def format_es_date(d: date | datetime | None, include_year: bool | None = None) -> str:
+WEEKDAYS_ES = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"]
+
+def format_es_date(
+    d: date | datetime | None,
+    include_year: bool | None = None,
+    include_weekday: bool = False,
+) -> str:
     """
-    Formatea fechas como:
-      - "8 de septiembre"
-      - "9 de agosto de 2023"
-    include_year:
+    Ejemplos:
+      - format_es_date(d)                       -> "2 de septiembre"
+      - format_es_date(d, include_year=True)    -> "2 de septiembre de 2024"
+      - format_es_date(d, include_weekday=True) -> "Martes, 2 de septiembre de 2024" (si corresponde incluir año)
+    Reglas de `include_year`:
       - True  -> siempre incluye año
       - False -> nunca incluye año
       - None  -> incluye año solo si d.year != año actual
-    Acepta date o datetime. Si d es None, retorna "".
     """
     if d is None:
         return ""
     if isinstance(d, datetime):
-        # Convierte a fecha en tz local para coherencia
         d = timezone.localtime(d).date()
 
-    day = d.day
-    month_name = MONTHS_ES[d.month - 1]
+    today = timezone.localdate()
     if include_year is None:
-        include_year = (d.year != timezone.localdate().year)
+        include_year = (d.year != today.year)
 
-    return f"{day} de {month_name}" + (f" de {d.year}" if include_year else "")
+    text = f"{d.day} de {MONTHS_ES[d.month - 1]}"
+    if include_year:
+        text += f" de {d.year}"
+
+    if include_weekday:
+        weekday = WEEKDAYS_ES[d.weekday()]  # Monday=0
+        text = f"{weekday} {text}"
+
+    return text
+

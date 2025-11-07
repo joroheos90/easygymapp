@@ -5,7 +5,7 @@ from .helpers import (
     format_es_date,
     role_required,
 )
-from django.contrib.auth import get_user_model
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse
 from urllib.parse import urlencode
@@ -13,14 +13,16 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.http import HttpResponseBadRequest
-from app.models import GymUser
 from datetime import date, timedelta
-from .models import DailyTimeslot, GymUser, BaseTimeslot, Payment
+from .models import DailyTimeslot, GymUser, BaseTimeslot, Payment, TimeslotSignup
 from dateutil.relativedelta import relativedelta
-from django.db.models import Max, Sum
+from django.db.models import Max, Sum, Count
 from calendar import monthrange
 from django.db import transaction
 from django.views.decorators.http import require_http_methods
+
+from app.models import GymUser
+from app.services import GymService
 
 
 @login_required
@@ -105,9 +107,134 @@ def base_hours(request):
     return render(request, "app/base_hours.html", ctx)
 
 
-
+@login_required
+@role_required(["member"])
+@require_http_methods(["GET", "POST"])
 def selector(request):
-    return render(request, "app/hourselection.html")
+    q = request.GET.get("date") or request.POST.get("date")
+    gym_user = getattr(request, "gym_user", None)
+
+    day = parse_date(q) if q else None
+    if day is None:
+        day = timezone.localdate()
+
+    error = None
+    success = None
+
+
+    if request.method == "POST":
+        if not gym_user:
+            error = "No autorizado."
+        else:
+            slot_id_raw = request.POST.get("slot_id")
+            try:
+                slot_id = int(slot_id_raw)
+            except (TypeError, ValueError):
+                slot_id = None
+
+            if not slot_id:
+                error = "Horario inválido."
+            else:
+                slot = get_object_or_404(DailyTimeslot, pk=slot_id)
+
+                if slot.slot_date != day:
+                    day = slot.slot_date
+
+                with transaction.atomic():
+                    existing = (
+                        TimeslotSignup.objects
+                        .select_for_update()
+                        .filter(user=gym_user, slot_date=day)
+                        .first()
+                    )
+
+                    if existing and existing.daily_slot_id == slot.id:
+                        # Seleccionó el mismo -> CANCELAR su participación
+                        existing.delete()
+                        success = f"Se canceló tu inscripción en «{slot.title}» para hoy."
+                    else:
+                        # Cambiar (o crear) inscripción -> validar pago y cupo
+                        ps, pe = _current_period_for(gym_user, ref=timezone.localdate())
+                        has_paid = Payment.objects.filter(
+                            user=gym_user, period_start__lte=ps, period_end__gte=pe
+                        ).exists()
+                        if not has_paid:
+                            error = "Debes tener tu pago al día para inscribirte."
+                        else:
+                            # Cupo del destino
+                            enrolled = TimeslotSignup.objects.filter(daily_slot=slot).count()
+                            cap = slot.capacity or 0
+                            if enrolled >= cap:
+                                error = "Este horario ya está lleno."
+                            else:
+                                # Si estaba inscrito en otro horario del mismo día, borra primero
+                                if existing:
+                                    existing.delete()
+                                # Crea la nueva inscripción
+                                TimeslotSignup.objects.create(
+                                    daily_slot=slot,
+                                    user=gym_user,
+                                    slot_date=slot.slot_date,   # NOT NULL
+                                    signed_at=timezone.now(),
+                                )
+                                success = f"Inscripción registrada en «{slot.title}»."
+
+        if error:
+            messages.error(request, error)
+        elif success:
+            messages.success(request, success)
+        return redirect(f"{reverse('app.selector')}?date={day.isoformat()}")
+
+    # Cargar data para la UI (siempre)
+    prev_day = day - timedelta(days=1)
+    next_day = day + timedelta(days=1)
+
+    my_slot_ids = set()
+    if gym_user:
+        my_slot_ids = set(
+            TimeslotSignup.objects
+            .filter(user=gym_user, slot_date=day)
+            .values_list("daily_slot_id", flat=True)
+        )
+
+    slots = (
+        DailyTimeslot.objects
+        .filter(slot_date=day)
+        .annotate(enrolled=Count("signups"))
+        .order_by("title")
+        .only("id", "slot_date", "title", "capacity", "status")
+    )
+
+    hours = []
+    for s in slots:
+        cap = s.capacity or 0
+        enrolled = int(s.enrolled or 0)
+        pct = int(round((enrolled / cap) * 100)) if cap > 0 else 0
+        if pct > 100: pct = 100
+        hours.append({
+            "id": s.id,
+            "title": s.title,
+            "capacity": cap,
+            "enrolled": enrolled,
+            "available": max(cap - enrolled, 0),
+            "status": s.status,
+            "occupancy_pct": pct,
+            "occupancy_width": f"{pct}%",
+            "is_mine": (s.id in my_slot_ids), 
+        })
+
+    ctx = {
+        "hours": hours,
+        "date": format_es_date(day, include_year=False, include_weekday=True),
+        "raw_date": day.isoformat(),
+        "prev_date": prev_day.isoformat(),
+        "next_date": next_day.isoformat(),
+        "error": error,
+        "success": success,
+    }
+    return render(request, "app/hourselection.html", ctx)
+
+
 
 
 def _current_period_for(user: GymUser, ref: date | None = None) -> tuple[date, date]:
@@ -130,7 +257,7 @@ def users(request):
     today = timezone.localdate()
     qs = (
         GymUser.objects
-        .filter(is_active=True)
+        .filter(is_active=True, role="member")
         .only("id", "full_name", "join_date")
         .order_by("full_name")
     )
@@ -297,17 +424,6 @@ def hours(request):
                                                 "prev_date": prev_day.isoformat(),
                                                 "next_date": next_day.isoformat(), 
                                                 "date": format_es_date(day)})
-
-# app/views.py
-from django.shortcuts import get_object_or_404, render, redirect
-from django.http import HttpResponseBadRequest
-from django.urls import reverse
-from django.utils.http import urlencode
-from django.utils import timezone
-from django.utils.dateparse import parse_date
-
-from app.models import GymUser
-from app.services import GymService
 
 @login_required
 @role_required(["member", "admin"])

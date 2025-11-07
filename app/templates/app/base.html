@@ -19,7 +19,7 @@
     </head>
     <body>
         {% block body %}
-        <div class="flex min-h-screen w-full flex-col bg-gray-50">
+        <div class="flex min-h-svh w-full flex-col {% block bg-body %} bg-gray-50{% endblock %}">
             {% block header %}
             <div
                 id="header"
