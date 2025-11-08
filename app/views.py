@@ -121,7 +121,6 @@ def base_hours(request):
         base_qs = (
             BaseTimeslot.objects
             .only("id", "title", "capacity", "is_active")
-            .order_by("id")
             .filter(gym=request.gym, is_active=True)
         )
         for b in base_qs:
@@ -133,6 +132,7 @@ def base_hours(request):
                     "title": b.title,
                     "capacity": b.capacity,
                     "status": DailyTimeslot.Status.OPEN,
+                    "day_order": b.day_order,
                 },
             )
             if made:
@@ -174,7 +174,7 @@ def base_hours(request):
         BaseTimeslot.objects
         .filter(gym=request.gym)
         .only("id", "title", "capacity", "is_active")
-        .order_by("id")
+        .order_by("day_order")
     )
     hours = [
         {
@@ -300,7 +300,7 @@ def selector(request):
         DailyTimeslot.objects
         .filter(gym=request.gym, slot_date=day)
         .annotate(enrolled=Count("signups"))
-        .order_by("id")
+        .order_by("day_order")
         .only("id", "slot_date", "title", "capacity", "status")
     )
 
@@ -515,7 +515,7 @@ def hours(request):
     slots = (
         DailyTimeslot.objects
         .filter(gym=request.gym, slot_date=day)
-        .order_by("id")
+        .order_by("day_order")
         .prefetch_related("signups__user")
     )
 

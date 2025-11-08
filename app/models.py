@@ -100,6 +100,7 @@ class BaseTimeslot(models.Model):
                             null=False, blank=False)  # <-- Fase 1: NULLABLE
     title = models.CharField(max_length=80)
     capacity = models.PositiveIntegerField()
+    day_order = models.PositiveIntegerField(blank=False, default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -111,7 +112,9 @@ class BaseTimeslot(models.Model):
         ]
         indexes = [
             models.Index(fields=["gym", "is_active"]),
+            models.Index(fields=["day_order"]),
         ]
+        ordering = ["day_order"] 
 
     def __str__(self):
         return f"[{self.gym_id}] {self.title}"
@@ -132,6 +135,7 @@ class DailyTimeslot(models.Model):
     )
     title = models.CharField(max_length=80)
     capacity = models.PositiveIntegerField()
+    day_order = models.PositiveIntegerField(blank=False, default=0)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
     created_at = models.DateTimeField(default=timezone.now)
 
@@ -140,9 +144,11 @@ class DailyTimeslot(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["gym", "slot_date", "title"], name="uniq_daily_date_title_per_gym"),
         ]
+        ordering = ["day_order"] 
         indexes = [
             models.Index(fields=["gym", "slot_date"]),
             models.Index(fields=["gym", "status"]),
+            models.Index(fields=["day_order"]),
         ]
 
     def __str__(self):

@@ -52,6 +52,7 @@ MIDDLEWARE = [
     "app.middleware.GymContextMiddleware",
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'app.middleware.NoCacheHTMLMiddleware',
 ]
 
 ROOT_URLCONF = 'easygym.urls'
