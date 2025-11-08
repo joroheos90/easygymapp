@@ -18,7 +18,7 @@
 </a>
 {% endblock %} {% block content %}
 <div class="font-roboto flex flex-col gap-6 px-4 py-6">
-    <h1 class="text-xl font-semibold">Horarios</h1>
+    <h1 class="text-xl font-semibold">Publica los horarios</h1>
     <div class="flex flex-col gap-2">
         {% for hour in hours %}
         <div
@@ -54,14 +54,71 @@
         </div>
         {% endfor %}
     </div>
-    {% if not already_created_for_tomorrow %}
-    <form method="post" class="flex flex-col items-center rounded-[8px] bg-white px-4 py-2 mt-4">
-        {% csrf_token %}
-        <button class="cursor-pointer font-normal text-blue-500 text-left">
-            Publicar horarios para mañana
-        </button>
-    </form>
-    {% endif %}
-        
-</div>
+    <div class="mt-4 flex flex-col gap-3">
+        <!-- Publicar HOY -->
+        {% if not already_created_for_today %}
+          <form method="post" class="flex items-center justify-center rounded-[8px] bg-white px-4 py-2 shadow-sm">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="today">
+            <button class="cursor-pointer font-normal text-blue-500 text-left">
+              Publicar horarios para <span class="font-bold">hoy</span>
+            </button>
+          </form>
+        {% else %}
+        <div class="flex items-center gap-3 rounded-[8px] border border-green-300 bg-green-50 px-4 py-2 text-green-700">
+            <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/>
+            </svg>
+            <span class="text-sm">Los horarios de <span class="font-semibold">hoy</span> ya están publicados o no están disponibles.</span>
+          </div>
+        {% endif %}
+    
+        <!-- Publicar MAÑANA -->
+        {% if not already_created_for_tomorrow %}
+          <form method="post" class="flex items-center justify-center rounded-[8px] bg-white px-4 py-2 shadow-sm">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="tomorrow">
+            <button class="cursor-pointer font-normal text-blue-500 text-left">
+              Publicar horarios para <span class="font-bold">mañana</span>
+            </button>
+          </form>
+        {% else %}
+        <div class="flex items-center gap-3 rounded-[8px] border border-green-300 bg-green-50 px-4 py-2 text-green-700">
+            <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/>
+            </svg>
+            <span class="text-sm">Los horarios de <span class="font-semibold">mañana</span> ya están publicados o no están disponibles.</span>
+          </div>
+        {% endif %}
+    
+        <!-- Publicar SEMANA -->
+        {% if week_missing_count > 0 %}
+          <form method="post" class="flex items-center justify-center rounded-[8px] bg-white py-2 shadow-sm">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="week">
+            <button class="cursor-pointer font-normal text-blue-500 text-left">
+              Publicar la <span class="font-bold">semana</span> (faltan {{ week_missing_count }} día{{ week_missing_count|pluralize:"s" }})
+            </button>
+          </form>
+        {% else %}
+          <div class="flex items-center gap-3 rounded-[8px] border border-green-300 bg-green-50 px-4 py-2 text-green-700">
+            <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/>
+            </svg>
+            <span class="text-sm">La <span class="font-semibold">semana</span> ya está completamente publicada o los días restantes no están disponibles.</span>
+          </div>
+        {% endif %}
+        <div
+        class="flex items-center justify-center rounded-[8px] bg-white py-2 shadow-sm"
+    >
+        <a
+            href="{% url 'app.hours'%}"
+            class="cursor-pointer font-normal text-blue-500 text-left"
+        >
+            Ver las asistencias
+        </a>
+    </div>
+      </div>
+
+    </div>
 {% endblock %}

@@ -1,7 +1,7 @@
 {% extends "app/base.html" %} {% load customfilters %} 
 {% load humanize %}
 {% block title %}Pagos{% endblock %} {% block headerTitle %}Pagos{% endblock %} {% block headerButtons %}
-<a  href="{% if request.is_member %}{% url 'app.profile' %}{% else %}{% url 'app.admin' %}{% endif %}"
+<a  href="{% if request.is_member %}{% url 'app.profile' %}{% elif user_id %}{% url 'app.profile'%}?userid={{user_id}}{% else%}{% url 'app.admin' %}{% endif %}"
    
 
 class="cursor-pointer text-lg font-normal">
@@ -31,27 +31,58 @@ class="cursor-pointer text-lg font-normal">
 <div class="font-roboto flex flex-col gap-6 px-4 py-6">
     <h1 class="text-xl font-semibold">Pagos</h1>
     <div class="flex w-full flex-row gap-2 overflow-x-auto">
-        <div
-            class="h-6 cursor-pointer rounded-full border px-2 text-sm font-bold text-gray-500"
+        <a
+            href="{% url 'app.payments'%}?filter=all"
+            class="h-7 cursor-pointer rounded-full text-nowrap flex items-center border px-2 text-sm font-bold 
+            {% if filter == 'all' %} bg-green-200 text-green-800 
+            {% else %} text-gray-500 {% endif %}"
         >
             Todos
-        </div>
-        <div
-            class="h-6 cursor-pointer rounded-full border bg-green-200 px-2 text-sm font-bold text-green-800"
+        </a>
+        <a
+            href="{% url 'app.payments'%}?filter=today"
+            class="h-7 cursor-pointer rounded-full text-nowrap flex items-center border px-2 text-sm font-bold 
+            {% if filter == 'today' %} bg-green-200 text-green-800 
+            {% else %} text-gray-500 {% endif %}"
+        >
+            Hoy
+        </a>
+        <a
+            href="{% url 'app.payments'%}?filter=current_month"
+            class="h-7 cursor-pointer rounded-full text-nowrap flex items-center border px-2 text-sm font-bold 
+            {% if filter == 'current_month' %} bg-green-200 text-green-800 
+            {% else %} text-gray-500 {% endif %}"
         >
             Este mes
-        </div>
+        </a>
+        <a
+            href="{% url 'app.payments'%}?filter=last_3"
+            class="h-7 cursor-pointer rounded-full text-nowrap flex items-center border px-2 text-sm font-bold 
+            {% if filter == 'last_3' %} bg-green-200 text-green-800 
+            {% else %} text-gray-500 {% endif %}"
+        >
+            De 3 dias
+        </a>
+        <a
+            href="{% url 'app.payments'%}?filter=last_7"
+            class="h-7 cursor-pointer rounded-full text-nowrap flex items-center border px-2 text-sm font-bold 
+            {% if filter == 'last_7' %} bg-green-200 text-green-800 
+            {% else %} text-gray-500 {% endif %}"
+        >
+            De 7 dias
+        </a>
     </div>
     <div class="flex flex-col gap-2">
         {% for payment in payments %}
         {% if request.is_admin %}
-            <a href="{% url 'app.payment' %}?paymentid={{payment.id}}" class="flex w-full cursor-pointer flex-row items-center justify-between border-b border-gray-400 py-2">
+            <a href="{% url 'app.payment' %}?paymentid={{payment.id}}{% if user_id %}&userid={{user_id}}{% endif %}" class="flex w-full cursor-pointer flex-row items-center justify-between border-b border-gray-400 py-2">
                 <div class="flex w-2/4 flex-col">
                 <span class="text-base capitalize font-medium"> {{payment.full_name}}</span>
                 <span class="text-xs text-gray-500">{{payment.paid_at_label}}</span>
                 </div>
                 <div class="flex w-1/4 flex-col items-center">
                 <span class="text-base font-medium">{{payment.period_label}}</span>
+                <span class="text-xs text-gray-500">Periodo</span>
                 </div>
                 <div class="flex w-1/4 flex-col items-end">
                 <span class="text-base font-medium">${{payment.amount|floatformat:0|intcomma}}</span>

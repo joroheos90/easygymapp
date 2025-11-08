@@ -118,7 +118,11 @@
                     <span class="text-base font-medium capitalize line-clamp-1"
                         >{{user.full_name}}</span
                     >
-                    <span class="text-xs text-gray-500 line-clamp-1">Próximo pago {{user.next_payment_date}}</span>
+                    {% if user.paid_current_period %}
+                        <span class="text-xs text-gray-500 line-clamp-1">Próximo pago {{user.next_payment_date}}</span>
+                    {% else %}
+                        <span class="text-xs text-gray-500 line-clamp-1">Su pago venció el {{user.expired_on}}</span>
+                    {% endif %}
                 </div>
                 {% if user.paid_current_period %}
                 <span

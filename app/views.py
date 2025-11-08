@@ -1,56 +1,77 @@
-from django.http import HttpResponse
-from django.shortcuts import render, get_object_or_404, redirect
-from .helpers import (
-    signed_at_parts,
-    format_es_date,
-    role_required,
-    gym_required,
-)
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.urls import reverse
+# Standard library
+from calendar import monthrange
+from datetime import date, timedelta
 from urllib.parse import urlencode
-from django.shortcuts import render
+
+# Third-party
+from dateutil.relativedelta import relativedelta
+
+# Django
+from django.contrib import messages
+from django.contrib.auth import logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
+from django.contrib.auth.views import LoginView, PasswordChangeView
+from django.db import transaction
+from django.db.models import Count, Max, Sum
+from django.http import HttpResponse, HttpResponseBadRequest
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from django.http import HttpResponseBadRequest
-from datetime import date, timedelta
-from .models import Gym, DailyTimeslot, GymUser, BaseTimeslot, Payment, TimeslotSignup
-from dateutil.relativedelta import relativedelta
-from django.db.models import Max, Sum, Count
-from calendar import monthrange
-from django.db import transaction
 from django.views.decorators.http import require_http_methods
-from app.services import GymService
-from django.contrib.auth.views import LoginView, PasswordChangeView
-from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
-from django.contrib.auth import logout
-from django.urls import reverse_lazy
 
+# Local
+from app.services import GymService
+from .helpers import format_es_date, gym_required, role_required, signed_at_parts
+from .models import BaseTimeslot, DailyTimeslot, Gym, GymUser, Payment, TimeslotSignup
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
+@role_required(["admin", "member"])
 def home(request):
+    gp = request.gym_user
+
     if request.method == "POST":
-        gym_id = request.POST.get("gym_id")
-        gym = get_object_or_404(Gym, pk=gym_id, is_active=True)
+        posted_gym_id = request.POST.get("gym_id")
 
+        if request.is_admin:
+            # Admin puede seleccionar cualquier gym activo
+            gym = get_object_or_404(Gym, pk=posted_gym_id, is_active=True)
+        else:
+            # Member: fuerza su propio gym (aunque postee otro id)
+            if getattr(gp, "gym_id", None):
+                gym = get_object_or_404(Gym, pk=gp.gym_id, is_active=True)
+            else:
+                # Sin gym en el perfil: no puede seleccionar otro
+                return redirect("app.home")
+
+        # Persistir selección
         request.session["gym_id"] = str(gym.id)
-        gp = getattr(request.user, "gym_profile", None)
 
-        if gp and getattr(gp, "role", "") == "admin":
+        # Redirigir según rol
+        if request.is_admin:
             return redirect("app.admin")
         else:
             if gp and gp.id:
                 profile_url = reverse("app.profile")
-                return redirect(f"{profile_url}")
-            else:
-                return redirect("app.home")
+                return redirect(f"{profile_url}?userid={gp.id}")
+            return redirect("app.home")
 
-    gyms = Gym.objects.filter(is_active=True).only("id", "name", "address").order_by("name")
+    # GET: lista de gyms según rol
+    if request.is_admin:
+        gyms = Gym.objects.filter(is_active=True).only("id", "name", "address").order_by("name")
+    else:
+        # Solo el gym del miembro (si tiene)
+        if getattr(gp, "gym_id", None):
+            gyms = Gym.objects.filter(id=gp.gym_id, is_active=True).only("id", "name", "address")
+        else:
+            gyms = Gym.objects.none()
+
     selected_id = getattr(getattr(request, "gym", None), "id", None)
     return render(request, "app/home.html", {"gyms": gyms, "selected_gym_id": selected_id})
+
 
 @login_required
 @role_required(["admin"])
@@ -58,7 +79,7 @@ def home(request):
 def admin(request):
     today = timezone.localdate()
 
-    active_members = GymUser.objects.filter(gym=request.gym, is_active=True).count()
+    active_members = GymUser.objects.filter(gym=request.gym, is_active=True, role="member").count()
 
     qs = Payment.objects.all()
     qs = qs.filter(gym=request.gym, period_start__lte=today, period_end__gt=today)
@@ -74,46 +95,87 @@ def admin(request):
     return render(request, "app/admin.html", ctx)
 
 
+from datetime import timedelta, date
+from django.contrib import messages
+# ...
+
 @login_required
 @role_required(["admin"])
 @require_http_methods(["GET", "POST"])
 @gym_required
 def base_hours(request):
+    today = timezone.localdate()
+    tomorrow = today + timedelta(days=1)
 
-    tomorrow = timezone.localdate() + timedelta(days=1)
+    AVOID_WEEKDAYS = {5, 6}
+
+    def can_publish(day: date) -> bool:
+        return day.weekday() not in AVOID_WEEKDAYS
+
+    def publish_for_day(day: date) -> tuple[int, int]:
+        """Crea DailyTimeslot desde BaseTimeslot para un día. Devuelve (created, skipped)."""
+        if not can_publish(day):
+            return (0, 0)
+
+        created = skipped = 0
+        base_qs = (
+            BaseTimeslot.objects
+            .only("id", "title", "capacity", "is_active")
+            .order_by("id")
+            .filter(gym=request.gym, is_active=True)
+        )
+        for b in base_qs:
+            obj, made = DailyTimeslot.objects.get_or_create(
+                gym=request.gym,
+                base=b,
+                slot_date=day,
+                defaults={
+                    "title": b.title,
+                    "capacity": b.capacity,
+                    "status": DailyTimeslot.Status.OPEN,
+                },
+            )
+            if made:
+                created += 1
+            else:
+                skipped += 1
+        return created, skipped
 
     if request.method == "POST":
-        created = 0
-        skipped = 0
-
-        base_qs = BaseTimeslot.objects.only("id", "title", "capacity", "is_active").filter(gym=request.gym, is_active=True)
+        action = (request.POST.get("action") or "").strip()
+        created_total = skipped_total = 0
+        avoided_days = 0
 
         with transaction.atomic():
-            for b in base_qs:
-                obj, made = DailyTimeslot.objects.get_or_create(
-                    base=b,
-                    slot_date=tomorrow,
-                    gym=request.gym,
-                    defaults={
-                        "title": b.title,
-                        "capacity": b.capacity,
-                        "status": "open",
-                    },
-                )
-                if made:
-                    created += 1
+            if action == "today":
+                if can_publish(today):
+                    c, s = publish_for_day(today)
+                    created_total += c; skipped_total += s
                 else:
-                    skipped += 1
-
+                    avoided_days += 1
+            elif action == "tomorrow":
+                if can_publish(tomorrow):
+                    c, s = publish_for_day(tomorrow)
+                    created_total += c; skipped_total += s
+                else:
+                    avoided_days += 1
+            elif action == "week":
+                for i in range(0, 7):
+                    day = today + timedelta(days=i)
+                    if not can_publish(day):
+                        avoided_days += 1
+                        continue
+                    c, s = publish_for_day(day)
+                    created_total += c; skipped_total += s
         return redirect("app.base_hours")
 
+    # GET
     qs = (
         BaseTimeslot.objects
-        .filter(gym=request.gym, is_active=True)
+        .filter(gym=request.gym)
         .only("id", "title", "capacity", "is_active")
         .order_by("id")
     )
-
     hours = [
         {
             "id": h.id,
@@ -125,11 +187,26 @@ def base_hours(request):
         for h in qs
     ]
 
-    already_created = DailyTimeslot.objects.filter(gym=request.gym, slot_date=tomorrow).exists()
+    # Flags para hoy/mañana (si son fin de semana, márcalos como ya “no publicables”)
+    exists_today = DailyTimeslot.objects.filter(gym=request.gym, slot_date=today).exists()
+    exists_tomorrow = DailyTimeslot.objects.filter(gym=request.gym, slot_date=tomorrow).exists()
+
+    # Semana: contar solo días publicables que falten
+    week_days = [today + timedelta(days=i) for i in range(0, 7)]
+    week_missing = [
+        d for d in week_days
+        if can_publish(d) and not DailyTimeslot.objects.filter(gym=request.gym, slot_date=d).exists()
+    ]
+    week_missing_count = len(week_missing)
+
     ctx = {
         "hours": hours,
-        "tomorrow": tomorrow, 
-        "already_created_for_tomorrow": already_created,
+        "today": today,
+        "tomorrow": tomorrow,
+        "already_created_for_today": exists_today or not can_publish(today),
+        "already_created_for_tomorrow": exists_tomorrow or not can_publish(tomorrow),
+        "week_missing_count": week_missing_count,
+        "avoid_weekdays": sorted(AVOID_WEEKDAYS),  # opcional por si lo quieres mostrar
     }
     return render(request, "app/base_hours.html", ctx)
 
@@ -173,7 +250,7 @@ def selector(request):
                 if existing and existing.daily_slot_id == slot.id:
                     # Seleccionó el mismo -> CANCELAR su participación
                     existing.delete()
-                    success = f"Se canceló tu inscripción en «{slot.title}» para hoy."
+                    success = f"Se canceló tu registro con éxito"
                 else:
                     # Cambiar (o crear) inscripción -> validar pago y cupo
                     ps, pe = _current_period_for(request.gym_user, ref=timezone.localdate())
@@ -200,7 +277,7 @@ def selector(request):
                                 slot_date=slot.slot_date,   # NOT NULL
                                 signed_at=timezone.now(),
                             )
-                            success = f"Inscripción registrada en «{slot.title}»."
+                            success = f"Registro completado con éxito."
 
         if error:
             messages.error(request, error)
@@ -223,7 +300,7 @@ def selector(request):
         DailyTimeslot.objects
         .filter(gym=request.gym, slot_date=day)
         .annotate(enrolled=Count("signups"))
-        .order_by("title")
+        .order_by("id")
         .only("id", "slot_date", "title", "capacity", "status")
     )
 
@@ -290,13 +367,23 @@ def users(request):
             user=u, period_start__lte=ps, period_end__gte=pe
         ).exists()
 
-        agg = Payment.objects.filter(user=u).aggregate(last_end=Max("period_end"))
+        agg = Payment.objects.filter(gym=request.gym, user=u).aggregate(last_end=Max("period_end"))
         last_end = agg["last_end"]
         if last_end:
             last_covered_day = last_end - timedelta(days=1)
             days_since_last_cover = (today - last_covered_day).days
         else:
             days_since_last_cover = 10**9
+            
+        if not paid:
+            if agg["last_end"]:
+                expired_on = agg["last_end"]
+            else:
+                expired_on = ps
+        else:
+            expired_on = None
+
+
 
         days_to_due = (pe - today).days
         include = False
@@ -320,6 +407,7 @@ def users(request):
                 "full_name": u.full_name,
                 "next_payment_date": format_es_date(de),
                 "paid_current_period": paid,
+                "expired_on": format_es_date(expired_on) if expired_on else "",
             })
 
     return render(request, "app/users.html", {"users": out, "filter": filt})
@@ -387,13 +475,19 @@ def profile(request):
             ),
         }
 
-
+    expired_on = None
+    if not has_paid:
+        if last_payment:
+            expired_on = last_payment.period_end
+        else:
+            expired_on = ps
 
     ctx = {
         "user": {
             "id": user.id,
             "full_name": user.full_name,
             "phone": getattr(user, "phone", None),
+            "expired_on": format_es_date(expired_on, include_year=True) if expired_on else "",
             "next_payment_date": format_es_date(pe),
             "has_paid": has_paid,
             "join_date": format_es_date(user.join_date, include_year=True),
@@ -421,7 +515,7 @@ def hours(request):
     slots = (
         DailyTimeslot.objects
         .filter(gym=request.gym, slot_date=day)
-        .order_by("title")
+        .order_by("id")
         .prefetch_related("signups__user")
     )
 
@@ -450,7 +544,7 @@ def hours(request):
     return render(request, "app/hours.html", {"hours": data,
                                                 "prev_date": prev_day.isoformat(),
                                                 "next_date": next_day.isoformat(), 
-                                                "date": format_es_date(day)})
+                                                "date": format_es_date(day, include_weekday=True)})
 
 @login_required
 @role_required(["member", "admin"])
@@ -583,7 +677,8 @@ def _parse_amount(raw: str) -> int:
 
 def _period_options(n: int = 6) -> list[tuple[str, str]]:
     """Meses desde el actual hacia adelante: value='YYYY-MM', label='Mes-YYYY'."""
-    today = timezone.localdate()
+    date = timezone.localdate()
+    today = date - timedelta(weeks=8)
     y, m = today.year, today.month
     out = []
     for i in range(n):
@@ -658,7 +753,9 @@ def payment(request):
             p.period_label = period_label
             p.notes = notes
             p.save()
-            if pref_user_id:
+            if pref_user_id and pagoid:
+                return redirect(f"{reverse('app.profile')}?userid={pref_user_id}")
+            elif pref_user_id:
                 return redirect(f"{reverse('app.payments')}?userid={pref_user_id}")
             else:
                 return redirect("app.payments")
@@ -688,7 +785,7 @@ def _pago_context(gym, is_edit: bool, pagoid: str | None, payment: Payment | Non
     """Contexto común para el template."""
     users = GymUser.objects.filter(gym=gym, is_active=True).only("id", "full_name").order_by("full_name")
     methods = METHOD_CHOICES
-    periods = _period_options(2)
+    periods = _period_options(4)
 
     initial = {}
     if payment:
@@ -706,7 +803,7 @@ def _pago_context(gym, is_edit: bool, pagoid: str | None, payment: Payment | Non
         try:
             if pref_user_id:
                 initial["user_id"] = int(pref_user_id)
-                initial["paid_at"] = timezone.localdate().isoformat() 
+            initial["paid_at"] = timezone.localdate().isoformat() 
         except ValueError:
             pass
 
@@ -720,23 +817,33 @@ def _pago_context(gym, is_edit: bool, pagoid: str | None, payment: Payment | Non
         "initial": initial,
     }
 
+
 @login_required
 @role_required(["member", "admin"])
 @gym_required
 def payments(request):
-    if request.is_member:
-        raw = request.user_id
+    gp = getattr(request, "gym_user", None)
+    is_member = getattr(gp, "role", "") == "member"
+
+    if is_member:
+        userid = gp.id
     else:
         raw = request.GET.get("userid")
+        try:
+            userid = int(raw) if raw is not None else None
+        except (TypeError, ValueError):
+            userid = None
 
-    try:
-        userid = int(raw) if raw is not None else None
-    except (TypeError, ValueError):
-        userid = None
-    
     filt = (request.GET.get("filter") or "all").strip().lower()
-    period_str = request.GET.get("period")
-
+    # Acepta alias comunes
+    if filt in {"hoy"}:
+        filt = "today"
+    if filt in {"ultimos_3", "3"}:
+        filt = "last_3"
+    if filt in {"ultimos_7", "7"}:
+        filt = "last_7"
+    if filt in {"mes", "month_current"}:
+        filt = "month"
 
     today = timezone.localdate()
 
@@ -744,56 +851,48 @@ def payments(request):
         Payment.objects
         .filter(gym=request.gym)
         .select_related("user")
-        .only("id", "paid_at", "period_start", "period_end", "period_label", "method", "amount", "user__id", "user__full_name")
+        .only(
+            "id", "paid_at", "amount", "method",
+            "period_label", "user__id", "user__full_name"
+        )
     )
 
     if userid:
-        try:
-            uid = int(userid)
-            qs = qs.filter(user_id=uid)
-        except (TypeError, ValueError):
-            pass  # si viene mal, simplemente no filtra por usuario
+        # Garantiza que el user pertenezca al mismo gym (seguridad)
+        get_object_or_404(GymUser, id=userid, gym=request.gym)
+        qs = qs.filter(user_id=userid)
 
-    if filt == "period" and period_str:
-        try:
-            y, m = map(int, period_str.split("-"))
-            qs = qs.filter(period_start__year=y, period_start__month=m)
-        except Exception:
-            # si el periodo viene mal, no aplica filtro adicional
-            pass
+    # Aplica rango por fecha de pago (paid_at__date)
+    if filt == "today":
+        qs = qs.filter(paid_at__date=today)
     elif filt == "last_3":
         since = today - timedelta(days=3)
         qs = qs.filter(paid_at__date__gte=since)
     elif filt == "last_7":
         since = today - timedelta(days=7)
         qs = qs.filter(paid_at__date__gte=since)
-    else:
-        # "all" u otros -> sin filtro extra
-        pass
+    elif filt == "month":
+        qs = qs.filter(paid_at__year=today.year, paid_at__month=today.month)
+    # "all" -> sin filtro extra
 
     qs = qs.order_by("-paid_at", "-id")
 
-    # Adaptamos al formato que tu template espera:
-    #   <span class="text-base font-medium">{{ full_name }}</span>
-    #   <span class="text-xs text-gray-500">{{ paid_at_label }}</span>
+    # Adaptar al template (nombre y fecha en español)
     out = []
     for p in qs:
-        full_name = p.user.full_name if p.user_id else "—"
         paid_date = p.paid_at.date() if hasattr(p.paid_at, "date") else p.paid_at
         out.append({
             "id": p.id,
-            "full_name": full_name,
+            "full_name": p.user.full_name if p.user_id else "—",
             "paid_at_label": format_es_date(paid_date, include_year=True),
             "period_label": p.period_label,
-            "method": p.get_method_display(),
+            "method": p.get_method_display(),  # “Efectivo / Transferencia / SINPE”
             "amount": p.amount,
-
         })
 
     return render(request, "app/payments.html", {
         "payments": out,
         "filter": filt,
-        "period": period_str or "",
         "user_id": userid or "",
     })
 
