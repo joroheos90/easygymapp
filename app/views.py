@@ -934,3 +934,69 @@ class MemberPasswordChangeView(PasswordChangeView):
     template_name = "app/password_change.html"
     form_class = PasswordChangeForm
     success_url = reverse_lazy("app.home")  # vuelve al home después de cambiar
+
+
+@require_http_methods(["GET", "POST"])
+def public_join_by_gym(request, gym_id: int):
+    """
+    Registro público sin autenticación.
+    URL: /join/<gym_id>/
+    - GET: muestra formulario (full_name, phone)
+    - POST:
+        - Si ya existe un GymUser en ESTE gym con ese phone -> mostrar mensaje con su número de miembro.
+        - Si no existe -> crear GymUser + User con username = id del GymUser y password = 'gim12345'.
+    """
+    gym = get_object_or_404(Gym, pk=gym_id, is_active=True)
+
+    if request.method == "POST":
+        full_name = (request.POST.get("full_name") or "").strip()
+        phone     = (request.POST.get("phone") or "").strip()
+
+        errors = []
+        if len(full_name) < 2:
+            errors.append("Ingresa tu nombre completo.")
+        if len(phone) < 6:
+            errors.append("Ingresa un número de teléfono válido.")
+
+        # 1) Si ya existe alguien con ese teléfono en el mismo gym, muestra mensaje
+        if not errors:
+            existing = GymUser.objects.filter(gym=gym, phone=phone).only("id").first()
+            if existing:
+                # No creamos; devolvemos mensaje con su número de miembro
+                return render(request, "app/join.html", {
+                    "already_exists": True,
+                    "member_id": existing.id,
+                    "username": str(existing.id),
+                    # No sabemos si cambió su password; indicamos la temporal como referencia
+                    "login_hint": "Usa tu contraseña. Si nunca la cambiaste, la temporal es ‘gim12345’.",
+                    "gym": {"id": gym.id, "name": gym.name},
+                })
+
+        if errors:
+            return render(request, "app/join.html", {
+                "errors": errors,
+                "full_name": full_name,
+                "phone": phone,
+                "gym": {"id": gym.id, "name": gym.name},
+            })
+
+        # 2) Crear nuevo miembro + user con tu helper
+        g, u = GymService.crear_gymuser_y_user(gym=gym, full_name=full_name, is_active=True, password="gim12345")
+
+        # Guardar teléfono
+        if phone:
+            g.phone = phone
+            g.save(update_fields=["phone"])
+
+        return render(request, "app/join.html", {
+            "success": True,
+            "member_id": g.id,
+            "username": str(g.id),
+            "default_password": "gim12345",
+            "gym": {"id": gym.id, "name": gym.name},
+        })
+
+    # GET
+    return render(request, "app/join.html", {
+        "gym": {"id": gym.id, "name": gym.name},
+    })

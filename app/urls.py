@@ -23,5 +23,7 @@ urlpatterns = [
     path("login/", views.AppLoginView.as_view(), name="app.login"),
     path("logout/", views.logout_view, name="app.logout"),
     path("profile/password/", views.MemberPasswordChangeView.as_view(), name="app.password_change"),
-    
+
+    #join
+    path("join/<int:gym_id>", views.public_join_by_gym, name="app.join"),
 ]

@@ -1,0 +1,112 @@
+{% extends "app/base.html" %}
+{% load customfilters %}
+{% block title %}Registro{% endblock %}
+{% block body %}
+<div class="relative min-h-svh w-full">
+  <div class="absolute inset-0 -z-1">
+    <img
+      class="h-full w-full object-cover"
+      src="https://www.datocms-assets.com/142867/1762071570-easy-gym.png"
+      alt=""
+    />
+  </div>
+
+  <div class="flex w-full min-h-svh flex-col items-center gap-10 bg-black/60 pt-15 font-roboto">
+    {% if already_exists %}
+    <div class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-yellow-500 p-4 text-center text-base font-bold text-white">
+    Ya existe un miembro registrado con ese teléfono.
+    <span class="inline-block">&nbsp;Tu número de miembro es <b>{{ member_id }}</b> (usuario: <b>{{ username }}</b>).</span>
+    <span class="block text-sm font-medium mt-1">Inicia sesión con tu contraseña. Si nunca la cambiaste, usa la temporal <b>gim12345</b>.</span>
+    <a href="{% url 'app.login' %}" class="text-blue-500 underline">Ir a iniciar sesión</a>
+    </div>
+    {% endif %}
+
+
+    {% if success %}
+      <div class="mx-4 w-full max-w-md rounded-[16px] p-6 shadow-lg">
+        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-9 w-9 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/>
+          </svg>
+        </div>
+        <h2 class="mb-2 text-center text-white text-xl font-semibold text-gray-900">¡Registro exitoso!</h2>
+        <p class="mb-4 text-center text-sm text-white">
+          Tu cuenta ha sido creada. Entra a tu perfil para cambiar tu contraseña por seguridad.
+        </p>
+
+        <div class="mb-4 rounded-lg bg-gray-50 p-4">
+          <div class="mb-2 text-sm text-gray-600">Tu número de miembro:</div>
+          <div class="mb-3 text-center text-2xl font-bold tracking-wide text-gray-900">{{ member_id }}</div>
+
+          <div class="text-xs text-gray-500">
+            <div class="flex items-center justify-between py-1">
+              <span class="text-gray-600">Usuario:</span>
+              <code class="rounded bg-gray-200 px-2 py-0.5 text-gray-800">{{ username }}</code>
+            </div>
+            <div class="flex items-center justify-between py-1">
+              <span class="text-gray-600">Contraseña temporal:</span>
+              <code class="rounded bg-gray-200 px-2 py-0.5 text-gray-800">{{ default_password }}</code>
+            </div>
+          </div>
+        </div>
+
+        <a href="{% url 'app.login' %}"
+           class="mt-2 block h-[48px] flex items-center justify-center w-full rounded-[10px] bg-blue-600 text-center text-lg font-bold text-white transition hover:bg-blue-500">
+          Ir a Iniciar sesión
+        </a>
+      </div>
+
+    {% else %}
+    <h1 class="text-[42px] font-extrabold text-white">Regístrate</h1>
+      <!-- Formulario de registro -->
+      <form method="post" class="mx-4 w-full max-w-md rounded-[16px] p-6 shadow-lg">
+        {% csrf_token %}
+
+        <div class="mb-6 flex flex-col gap-4">
+          <div class="flex flex-col rounded-[8px] bg-white">
+            <div class="relative">
+              <span class="pointer-events-none absolute top-4 left-4 text-xs text-gray-500">Nombre y apellido</span>
+              <input
+                type="text"
+                name="full_name"
+                value="{{ full_name|default_if_none:'' }}"
+                placeholder="Ej. Jonathan Hernández"
+                autocomplete="name"
+                class="w-full border-b border-gray-300 px-4 pt-7 pb-3 text-base ring-0 focus:outline-none focus:ring-0"
+              />
+            </div>
+
+            <div class="relative">
+              <span class="pointer-events-none absolute top-4 left-4 text-xs text-gray-500">Teléfono</span>
+              <input
+                type="tel"
+                name="phone"
+                value="{{ phone|default_if_none:'' }}"
+                placeholder="Ej. 88888888"
+                autocomplete="tel"
+                class="w-full px-4 pt-7 pb-3 text-base ring-0 focus:outline-none focus:ring-0"
+              />
+            </div>
+          </div>
+
+          {% if errors %}
+          <div class="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            {% for e in errors %}<div>{{ e }}</div>{% endfor %}
+          </div>
+          {% endif %}
+        </div>
+
+        <button type="submit"
+                class="h-[56px] w-full rounded-[10px] bg-blue-600 text-xl font-bold text-white transition hover:bg-blue-500">
+          Crear mi cuenta
+        </button>
+
+        <p class="mt-4 text-center text-xs text-white/80">
+          Al crear tu cuenta, podrás iniciar sesión con tu <strong class="font-semibold">número de miembro</strong> y la contraseña temporal <strong class="font-semibold">gim12345</strong>.
+          Te recomendamos cambiarla en tu perfil.
+        </p>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
