@@ -931,6 +931,7 @@ class AppLoginView(LoginView):
         # Si quisieras un valor distinto al global:
         # self.request.session.set_expiry(60 * 60 * 24 * 21)
         return response
+    
 
 # --- Logout ---
 def logout_view(request):
