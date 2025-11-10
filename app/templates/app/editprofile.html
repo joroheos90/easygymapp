@@ -119,7 +119,7 @@
     </div>
 </form>
 
-{% if is_edit and is_admin %}
+<!-- {% if is_edit and is_admin %}
 <form method="post" class="flex flex-col items-center rounded-[8px] bg-white mx-4 px-4 py-2 my-4">
     {% csrf_token %}
     <input type="hidden" name="action" value="delete" />
@@ -127,7 +127,7 @@
         Borrar Miembro
     </button>
 </form>
-{% endif %}
+{% endif %} -->
 {% if is_edit and is_member %}
 <div method="post" class="flex flex-col mb-6 items-center rounded-[8px] bg-white mx-4 px-4 py-2 my-4">
     <a href="{% url 'app.password_change' %}" class="cursor-pointer font-normal text-blue-500 text-left">
