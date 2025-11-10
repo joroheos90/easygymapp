@@ -1,4 +1,5 @@
 {% extends "app/base.html" %} {% load customfilters %} 
+{% load humanize %}
 {% block title %}{{gym_name}}{% endblock %} {% block headerTitle %}{{gym_name}}{% endblock %} {% block headerButtons %}
 <a href="{% url 'app.home' %}" class="cursor-pointer text-lg font-normal">
     <svg
@@ -53,7 +54,7 @@
                 <span class="text-xs text-gray-500">Ingresos</span>
                 <span
                     class="flex flex-row items-center gap-1 text-2xl font-bold"
-                    >${{period_income}}
+                    >${{period_income|intcomma}}
                 </span>
             </div>
         </div>

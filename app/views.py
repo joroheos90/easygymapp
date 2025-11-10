@@ -81,8 +81,20 @@ def admin(request):
 
     active_members = GymUser.objects.filter(gym=request.gym, is_active=True, role="member").count()
 
-    qs = Payment.objects.all()
-    qs = qs.filter(gym=request.gym, period_start__lte=today, period_end__gt=today)
+    today = timezone.localdate()
+    first_day = today.replace(day=1)
+    first_day_next = first_day + relativedelta(months=1)
+
+    qs = (
+        Payment.objects
+        .filter(
+            gym=request.gym,
+            paid_at__date__gte=first_day,
+            paid_at__date__lt=first_day_next,
+        )
+        .select_related("user")
+        .order_by("-paid_at", "-id")
+    )
 
     period_income = qs.aggregate(total=Sum("amount"))["total"] or 0
 
@@ -94,10 +106,6 @@ def admin(request):
     }
     return render(request, "app/admin.html", ctx)
 
-
-from datetime import timedelta, date
-from django.contrib import messages
-# ...
 
 @login_required
 @role_required(["admin"])

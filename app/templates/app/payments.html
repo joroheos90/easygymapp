@@ -85,7 +85,7 @@ class="cursor-pointer text-lg font-normal">
                 <span class="text-xs text-gray-500">Periodo</span>
                 </div>
                 <div class="flex w-1/4 flex-col items-end">
-                <span class="text-base font-medium">${{payment.amount|floatformat:0|intcomma}}</span>
+                <span class="text-base font-medium">${{payment.amount|intcomma}}</span>
                 <span class="text-xs text-gray-500">{{payment.method}}</span>
                 </div>
             </a>
@@ -100,7 +100,7 @@ class="cursor-pointer text-lg font-normal">
                 <span class="text-xs text-gray-500">Periodo</span>
                 </div>
                 <div class="flex w-1/4 flex-col items-end">
-                <span class="text-base font-medium">${{payment.amount|floatformat:0|intcomma}}</span>
+                <span class="text-base font-medium">${{payment.amount|intcomma}}</span>
                 <span class="text-xs text-gray-500">{{payment.method}}</span>
                 </div>
             </div>

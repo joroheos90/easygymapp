@@ -53,9 +53,10 @@
                 <input
                     type="text"
                     name="amount"
+                    id="amount"
                     inputmode="numeric"
                     value="{{initial.amount}}"
-                    pattern="[0-9]*"
+                    autocomplete="off"
                     class="w-full px-1 py-3 text-right text-base font-normal tracking-widest ring-0 focus:ring-0 focus:outline-none"
                     placeholder="Monto"
                 />
@@ -124,4 +125,46 @@
         </div>
     </div>
 </form>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const el = document.getElementById("amount");
+      if (!el) return;
+    
+      const onlyDigits = (s) => (s || "").replace(/[^\d]/g, "");
+      const formatThousands = (s) => {
+        const raw = onlyDigits(s);
+        if (!raw) return "";
+        return raw.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      };
+    
+      // ---- FORMATEO AL CARGAR ----
+      el.value = formatThousands(el.value);
+    
+      // ---- mientras escriben/pegan ----
+      el.addEventListener("input", function () {
+        const start = el.selectionStart;
+        const before = el.value;
+        const formatted = formatThousands(before);
+        if (before !== formatted) {
+          el.value = formatted;
+          // coloca el cursor al final (simple y robusto para móvil)
+          el.setSelectionRange(el.value.length, el.value.length);
+        }
+      });
+    
+      // ---- al salir del campo ----
+      el.addEventListener("blur", function () {
+        el.value = formatThousands(el.value);
+      });
+    
+      // ---- al enviar, quitar puntos ----
+      const form = el.closest("form");
+      if (form) {
+        form.addEventListener("submit", function () {
+          el.value = onlyDigits(el.value); // "12.345" -> "12345"
+        });
+      }
+    });
+    </script>
+    
 {% endblock %}

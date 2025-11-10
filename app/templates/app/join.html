@@ -79,7 +79,7 @@
             <div class="relative">
               <span class="pointer-events-none absolute top-4 left-4 text-xs text-gray-500">Teléfono</span>
               <input
-                type="tel"
+                type="text"
                 name="phone"
                 value="{{ phone|default_if_none:'' }}"
                 placeholder="Ej. 88888888"
@@ -109,4 +109,71 @@
     {% endif %}
   </div>
 </div>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+      // Toma el input por name (funciona sin id). Cambia a '#phone' si le pones id.
+      const el = document.querySelector('input[name="phone"]');
+      if (!el) return;
+    
+      const onlyDigits = (s) => (s || "").replace(/\D+/g, "");
+      const formatCR = (s) => {
+        const raw = onlyDigits(s).slice(0, 8);     // máx 8 dígitos
+        if (!raw) return "";
+        if (raw.length <= 4) return raw;           // "1234"
+        return raw.slice(0, 4) + "-" + raw.slice(4); // "1234-5678"
+      };
+    
+      function setFieldError(msg) {
+        let hint = el.nextElementSibling;
+        if (!hint || !hint.classList.contains("field-hint")) {
+          hint = document.createElement("div");
+          hint.className = "field-hint text-xs mt-1";
+          el.insertAdjacentElement("afterend", hint);
+        }
+        hint.textContent = msg || "";
+        hint.style.color = msg ? "#dc2626" : ""; // rojo si hay error
+      }
+    
+      // Formateo al cargar
+      el.value = formatCR(el.value);
+    
+      // Mientras escriben/pegan
+      el.addEventListener("input", function () {
+        const before = el.value;
+        const formatted = formatCR(before);
+        if (before !== formatted) {
+          el.value = formatted;
+          // Cursor al final (simple y robusto en móvil)
+          el.setSelectionRange(el.value.length, el.value.length);
+        }
+        // Feedback suave
+        const len = onlyDigits(el.value).length;
+        if (len > 0 && len !== 8) setFieldError("El teléfono debe tener 8 dígitos.");
+        else setFieldError("");
+      });
+    
+      // Al salir del campo
+      el.addEventListener("blur", function () {
+        el.value = formatCR(el.value);
+        const len = onlyDigits(el.value).length;
+        if (len !== 8) setFieldError("El teléfono debe tener 8 dígitos.");
+      });
+    
+      // Enviar sin guion
+      const form = el.closest("form");
+      if (form) {
+        form.addEventListener("submit", function (e) {
+          const raw = onlyDigits(el.value);
+          if (raw.length !== 8) {
+            e.preventDefault();
+            setFieldError("El teléfono debe tener 8 dígitos.");
+            el.focus();
+            return;
+          }
+          el.value = raw; // "12345678" para el servidor
+        });
+      }
+    });
+    </script>
+    
 {% endblock %}
