@@ -11,7 +11,7 @@
     />
   </div>
 
-  <div class="flex w-full min-h-svh flex-col items-center gap-10 bg-black/60 pt-15 font-roboto">
+  <div class="flex w-full min-h-svh flex-col items-center gap-8 bg-black/60 pt-15 font-roboto">
     {% if already_exists %}
     <div class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-yellow-500 p-4 text-center text-base font-bold text-white">
     Ya existe un miembro registrado con ese teléfono.
@@ -57,7 +57,7 @@
       </div>
 
     {% else %}
-    <h1 class="text-[42px] font-extrabold text-white">Regístrate</h1>
+    <h1 class="text-[32px] font-extrabold px-4 text-center leading-normal text-white">Regístrate a {{gym.name}}</h1>
       <!-- Formulario de registro -->
       <form method="post" class="mx-4 w-full max-w-md rounded-[16px] p-6 shadow-lg">
         {% csrf_token %}
