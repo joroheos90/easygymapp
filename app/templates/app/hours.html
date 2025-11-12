@@ -1,4 +1,6 @@
-{% extends "app/base.html" %} {% block title %}Horarios{% endblock %} {% block headerTitle %}Horarios{% endblock %} {% block headerButtons %}
+{% extends "app/base.html" %}
+{% load customfilters %}
+{% block title %}Asistencias{% endblock %} {% block headerTitle %}Asistencias{% endblock %} {% block headerButtons %}
 <a href="{% url 'app.admin' %}" class="cursor-pointer text-lg font-normal">
     <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -82,28 +84,21 @@
             </div>
             <div class="flex flex-col gap-2">
                 {% for user in hour.users %}
-                <a
+                <a 
+                {% if request.is_admin %}
                     href="{% url 'app.profile' %}?userid={{user.id}}"
                     class="flex cursor-pointer flex-row items-center justify-between gap-2"
+                {% else %}
+                    aria-disabled="true" tabindex="-1"
+                    class="pointer-events-none flex flex-row items-center justify-between gap-2 cursor-not-allowed"
+                    title="No tienes permisos"
+                {% endif %}
                 >
-                    <div
-                        class="flex h-9 min-h-9 w-9 min-w-9 items-center justify-center rounded-full border border-gray-300 bg-blue-400"
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke-width="1.5"
-                            stroke="currentColor"
-                            class="size-4"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
-                            />
-                        </svg>
-                    </div>
+                <div
+                class="flex h-9 min-h-9 w-9 min-w-9 items-center justify-center rounded-full border border-gray-300 bg-blue-400"
+                >
+                    {{user.full_name|initials}}
+                </div>
                     <div
                         class="flex w-full flex-row items-center justify-between border-b border-gray-300 py-2"
                     >
@@ -128,9 +123,10 @@
                 {% empty %}
                 <div class="flex items-center gap-3 rounded-[12px] border border-dashed border-gray-300 bg-gray-50 px-4 py-3">
                     <div class="flex min-h-9 min-w-9 h-9 w-9 items-center justify-center rounded-full bg-white shadow">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="size-5 text-gray-500">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 15.75a6.75 6.75 0 0 0-6.75 6.75m13.5 0A6.75 6.75 0 0 0 12 15.75m0 0a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm3-9h3m-1.5-1.5v3" />
-                      </svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                          </svg>
+                          
                     </div>
                     <div class="flex flex-col">
                       <span class="text-xs font-medium text-gray-700">Aún no hay registrados</span>

@@ -34,6 +34,7 @@ class GymUser(models.Model):
     class Role(models.TextChoices):
         ADMIN = "admin", "Admin"
         MEMBER = "member", "Member"
+        STAFF = "staff", "Staff"
 
     id = models.BigAutoField(primary_key=True)
     full_name = models.CharField(max_length=120)

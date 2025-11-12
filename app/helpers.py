@@ -35,6 +35,7 @@ def role_required(roles: Iterable[str], forbid: bool = False):
             request.user_id = gu.id
             request.is_admin = (gu.role == "admin")
             request.is_member = (gu.role == "member")
+            request.is_staff = (gu.role == "staff")
             return view_func(request, *args, **kwargs)
         return _wrapped
     return decorator

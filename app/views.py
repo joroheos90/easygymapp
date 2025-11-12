@@ -29,14 +29,14 @@ from .models import BaseTimeslot, DailyTimeslot, Gym, GymUser, Payment, Timeslot
 
 @login_required
 @require_http_methods(["GET", "POST"])
-@role_required(["admin", "member"])
+@role_required(["admin", "member", "staff"])
 def home(request):
     gp = request.gym_user
 
     if request.method == "POST":
         posted_gym_id = request.POST.get("gym_id")
 
-        if request.is_admin:
+        if request.is_admin or request.is_staff:
             # Admin puede seleccionar cualquier gym activo
             gym = get_object_or_404(Gym, pk=posted_gym_id, is_active=True)
         else:
@@ -53,14 +53,13 @@ def home(request):
         # Redirigir según rol
         if request.is_admin:
             return redirect("app.admin")
+        if request.is_staff:
+            return redirect("app.hours")
         else:
-            if gp and gp.id:
-                profile_url = reverse("app.profile")
-                return redirect(f"{profile_url}?userid={gp.id}")
-            return redirect("app.home")
+            return redirect("app.profile")
 
     # GET: lista de gyms según rol
-    if request.is_admin:
+    if request.is_admin or request.is_staff:
         gyms = Gym.objects.filter(is_active=True).only("id", "name", "address").order_by("name")
     else:
         # Solo el gym del miembro (si tiene)
@@ -509,7 +508,7 @@ def profile(request):
     return render(request, "app/profile.html", ctx)
 
 @login_required
-@role_required(["admin"])
+@role_required(["admin", "staff"])
 @gym_required
 def hours(request):
     q = request.GET.get("date")
