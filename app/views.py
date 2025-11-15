@@ -359,6 +359,8 @@ def _current_period_for(user: GymUser, ref: date | None = None) -> tuple[date, d
 def users(request):
     filt = (request.GET.get("filter") or "all").strip().lower()
     delinquent_days = int(request.GET.get("days") or 30)
+    search = (request.GET.get("search") or "").strip()
+
     today = timezone.localdate()
     qs = (
         GymUser.objects
@@ -367,11 +369,17 @@ def users(request):
         .order_by("full_name")
     )
 
+    if search:
+        qs = qs.filter(full_name__icontains=search)
+
     out = []
     for u in qs:
         ps, pe = _current_period_for(u, ref=today)
-        paid = Payment.objects.filter(gym=request.gym,
-            user=u, period_start__lte=ps, period_end__gte=pe
+        paid = Payment.objects.filter(
+            gym=request.gym,
+            user=u,
+            period_start__lte=ps,
+            period_end__gte=pe
         ).exists()
 
         agg = Payment.objects.filter(gym=request.gym, user=u).aggregate(last_end=Max("period_end"))
@@ -390,8 +398,6 @@ def users(request):
         else:
             expired_on = None
 
-
-
         days_to_due = (pe - today).days
         include = False
         if filt == "overdue":
@@ -404,7 +410,7 @@ def users(request):
             include = (1 <= days_to_due <= 3)
         elif filt == "due_in_7":
             include = (1 <= days_to_due <= 7)
-        else:  # "all" (o cualquier otro valor)
+        else:  # "all" (or any other value)
             include = True
 
         if include:
@@ -417,7 +423,16 @@ def users(request):
                 "expired_on": format_es_date(expired_on) if expired_on else "",
             })
 
-    return render(request, "app/users.html", {"users": out, "filter": filt})
+    return render(
+        request,
+        "app/users.html",
+        {
+            "users": out,
+            "filter": filt,
+            "search": search,
+        },
+    )
+
 
 
 @login_required
