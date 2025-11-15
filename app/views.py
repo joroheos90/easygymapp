@@ -709,6 +709,12 @@ def payment(request):
         payment = get_object_or_404(Payment, pk=pagoid)
 
     if request.method == "POST":
+        if request.POST.get("action") == "delete":
+            if not payment:
+                return HttpResponseBadRequest("No puedes borrar: payment no encontrado")
+            payment.delete()
+            return redirect("app.payments")
+
         # --- leer form ---
         user_id   = request.POST.get("user")
         amount_in = request.POST.get("amount")

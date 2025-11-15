@@ -125,6 +125,23 @@
         </div>
     </div>
 </form>
+
+{% if is_edit and is_admin %}
+<form
+    method="post"
+    class="flex flex-col items-center rounded-[8px] bg-white mx-4 px-4 py-2 my-4"
+    onsubmit="return confirm('¿Seguro que quieres borrar este pago? Esta acción no se puede deshacer.');"
+>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="delete" />
+    <button
+        type="submit"
+        class="cursor-pointer font-normal text-red-500 text-left"
+    >
+        Borrar Pago
+    </button>
+</form>
+{% endif %}
 <script>
     document.addEventListener("DOMContentLoaded", function () {
       const el = document.getElementById("amount");
