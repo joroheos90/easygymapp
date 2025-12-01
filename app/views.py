@@ -348,11 +348,22 @@ def selector(request):
 def _current_period_for(user: GymUser, ref: date | None = None) -> tuple[date, date]:
     today = ref or timezone.localdate()
     anchor = user.join_date.day
-    if today.day < anchor:
-        start = (today.replace(day=1) - relativedelta(months=1)).replace(day=anchor)
+
+    current_max_day = monthrange(today.year, today.month)[1]
+    anchor_current_month = min(anchor, current_max_day)
+
+    if today.day < anchor_current_month:
+        # Todavía no llegamos al anchor de este mes → usar mes anterior
+        prev_month_first = today.replace(day=1) - relativedelta(months=1)
+        prev_max_day = monthrange(prev_month_first.year, prev_month_first.month)[1]
+        anchor_prev_month = min(anchor, prev_max_day)
+        start = prev_month_first.replace(day=anchor_prev_month)
     else:
-        start = today.replace(day=anchor)
-    end = start + relativedelta(months=1)  # exclusivo
+        # Ya estamos en o después del anchor de este mes
+        start = today.replace(day=anchor_current_month)
+
+    end = start + relativedelta(months=1)
+
     return start, end
 
 @login_required
