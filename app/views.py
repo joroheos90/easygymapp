@@ -1,4 +1,5 @@
 # Standard library
+import logging
 from calendar import monthrange
 from datetime import date, timedelta
 from urllib.parse import urlencode
@@ -26,6 +27,7 @@ from app.services import GymService
 from .helpers import format_es_date, gym_required, role_required, signed_at_parts
 from .models import BaseTimeslot, DailyTimeslot, Gym, GymUser, Payment, TimeslotSignup
 
+logger = logging.getLogger(__name__)
 
 @login_required
 @require_http_methods(["GET", "POST"])
@@ -358,80 +360,88 @@ def _current_period_for(user: GymUser, ref: date | None = None) -> tuple[date, d
 @gym_required
 def users(request):
     filt = (request.GET.get("filter") or "all").strip().lower()
-    delinquent_days = int(request.GET.get("days") or 30)
+    days_param = request.GET.get("days") or "30"
     search = (request.GET.get("search") or "").strip()
 
-    today = timezone.localdate()
-    qs = (
-        GymUser.objects
-        .filter(gym=request.gym, is_active=True, role="member")
-        .only("id", "full_name", "join_date")
-        .order_by("full_name")
-    )
+    try:
+        delinquent_days = int(days_param)
 
-    if search:
-        qs = qs.filter(full_name__icontains=search)
+        today = timezone.localdate()
+        qs = (
+            GymUser.objects
+            .filter(gym=request.gym, is_active=True, role="member")
+            .only("id", "full_name", "join_date")
+            .order_by("full_name")
+        )
 
-    out = []
-    for u in qs:
-        ps, pe = _current_period_for(u, ref=today)
-        paid = Payment.objects.filter(
-            gym=request.gym,
-            user=u,
-            period_start__lte=ps,
-            period_end__gte=pe
-        ).exists()
+        if search:
+            qs = qs.filter(full_name__icontains=search)
 
-        agg = Payment.objects.filter(gym=request.gym, user=u).aggregate(last_end=Max("period_end"))
-        last_end = agg["last_end"]
-        if last_end:
-            last_covered_day = last_end - timedelta(days=1)
-            days_since_last_cover = (today - last_covered_day).days
-        else:
-            days_since_last_cover = 10**9
-            
-        if not paid:
-            if agg["last_end"]:
-                expired_on = agg["last_end"]
+        out = []
+        for u in qs:
+            ps, pe = _current_period_for(u, ref=today)
+            paid = Payment.objects.filter(
+                gym=request.gym,
+                user=u,
+                period_start__lte=ps,
+                period_end__gte=pe
+            ).exists()
+
+            agg = Payment.objects.filter(gym=request.gym, user=u).aggregate(last_end=Max("period_end"))
+            last_end = agg["last_end"]
+            if last_end:
+                last_covered_day = last_end - timedelta(days=1)
+                days_since_last_cover = (today - last_covered_day).days
             else:
-                expired_on = ps
-        else:
-            expired_on = None
+                days_since_last_cover = 10**9
 
-        days_to_due = (pe - today).days
-        include = False
-        if filt == "overdue":
-            include = (not paid)
-        elif filt == "delinquent":
-            include = (not paid) and (days_since_last_cover > delinquent_days)
-        elif filt == "up_to_date":
-            include = paid
-        elif filt == "due_in_3":
-            include = (1 <= days_to_due <= 3)
-        elif filt == "due_in_7":
-            include = (1 <= days_to_due <= 7)
-        else:  # "all" (or any other value)
-            include = True
+            if not paid:
+                if agg["last_end"]:
+                    expired_on = agg["last_end"]
+                else:
+                    expired_on = ps
+            else:
+                expired_on = None
 
-        if include:
-            _, de = _current_period_for(u)
-            out.append({
-                "id": u.id,
-                "full_name": u.full_name,
-                "next_payment_date": format_es_date(de),
-                "paid_current_period": paid,
-                "expired_on": format_es_date(expired_on) if expired_on else "",
-            })
+            days_to_due = (pe - today).days
+            include = False
+            if filt == "overdue":
+                include = (not paid)
+            elif filt == "delinquent":
+                include = (not paid) and (days_since_last_cover > delinquent_days)
+            elif filt == "up_to_date":
+                include = paid
+            elif filt == "due_in_3":
+                include = (1 <= days_to_due <= 3)
+            elif filt == "due_in_7":
+                include = (1 <= days_to_due <= 7)
+            else:  # "all" (or any other value)
+                include = True
 
-    return render(
-        request,
-        "app/users.html",
-        {
-            "users": out,
-            "filter": filt,
-            "search": search,
-        },
-    )
+            if include:
+                _, de = _current_period_for(u)
+                out.append({
+                    "id": u.id,
+                    "full_name": u.full_name,
+                    "next_payment_date": format_es_date(de),
+                    "paid_current_period": paid,
+                    "expired_on": format_es_date(expired_on) if expired_on else "",
+                })
+
+        return render(
+            request,
+            "app/users.html",
+            {
+                "users": out,
+                "filter": filt,
+                "search": search,
+            },
+        )
+
+    except Exception as e:
+        logger.exception("Error in users view (filter=%s, search=%s): %s", filt, search, e)
+        raise
+
 
 
 
