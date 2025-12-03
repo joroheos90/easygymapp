@@ -28,7 +28,7 @@ def role_required(allowed_roles: Iterable[str]):
                 return render(
                     request,
                     "403.html",
-                    {"message": "You do not have a gym profile configured."},
+                    {"message": "No tienes un perfil de gim configurado"},
                     status=403,
                 )
 
@@ -37,7 +37,7 @@ def role_required(allowed_roles: Iterable[str]):
                 return render(
                     request,
                     "403.html",
-                    {"message": "Your role has not permission to access this page"},
+                    {"message": "Tu rol no tiene permisos para entrar a esta pagina"},
                     status=403,
                 )
 
@@ -56,7 +56,7 @@ def gym_required(view_func: Callable):
             return render(
                     request,
                     "403.html",
-                    {"message": "YYou must select a gym before accessing this page."},
+                    {"message": "Debes seleccionar un gym antes de entrar a esta pagina"},
                     status=403,
                 )
 
