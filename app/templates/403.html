@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Acceso denegado</title>
+</head>
+<body>
+    <h1>403 – Acceso denegado</h1>
+
+    {% if message %}
+        <p>{{ message }}</p>
+    {% else %}
+        <p>No tienes permiso para acceder a esta página.</p>
+    {% endif %}
+
+    {% if user.is_authenticated %}
+    <form
+        action="{% url 'app.logout' %}"
+        method="post"
+        class="inline absolute bottom-4 left-4"
+    >
+        {% csrf_token %}
+        <button type="submit" class="text-blue-600 cursor-pointer underline">
+            Salir
+        </button>
+    </form>
+    {% endif %}
+</body>
+</html>

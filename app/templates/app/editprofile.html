@@ -99,7 +99,7 @@
                         min-height: 48px;
                         line-height: 24px;
                     "
-                    {% if is_member %}disabled{% endif %}
+                    {% if request.is_member %}disabled{% endif %}
                     class="w-full py-3 disabled:bg-gray-200 disabled:text-gray-400 pl-11 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
                 />
             </div>
@@ -119,7 +119,7 @@
     </div>
 </form>
 
-{% if is_edit and is_admin %}
+{% if is_edit and request.is_admin %}
 <form
     method="post"
     class="flex flex-col items-center rounded-[8px] bg-white mx-4 px-4 py-2 my-4"
@@ -136,7 +136,7 @@
 </form>
 {% endif %}
 
-{% if is_edit and is_member %}
+{% if is_edit and request.is_member %}
 <div method="post" class="flex flex-col mb-6 items-center rounded-[8px] bg-white mx-4 px-4 py-2 my-4">
     <a href="{% url 'app.password_change' %}" class="cursor-pointer font-normal text-blue-500 text-left">
         Cambiar mi contraseña

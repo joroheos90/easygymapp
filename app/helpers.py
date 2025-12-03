@@ -3,51 +3,67 @@ from datetime import date, timedelta, datetime
 from typing import Dict, Optional
 from django.utils import timezone
 from functools import wraps
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Callable
 from django.http import HttpResponseForbidden, HttpRequest, HttpResponse
-from django.shortcuts import redirect
-from django.urls import reverse
-
-from app.models import GymUser
-
-def _get_gym_user_for_request(request):
-    u = getattr(request, "user", None)
-    if not u or not u.is_authenticated:
-        return None
-    return getattr(u, "gym_profile", None)
+from django.shortcuts import redirect, resolve_url
+from django.conf import settings
+from django.shortcuts import render
 
 
-def role_required(roles: Iterable[str], forbid: bool = False):
-    roles_set = set(roles)
-    def decorator(view_func):
+def role_required(allowed_roles: Iterable[str]):
+    allowed = set(allowed_roles)
+
+    def decorator(view_func: Callable):
         @wraps(view_func)
         def _wrapped(request: HttpRequest, *args, **kwargs) -> HttpResponse:
             if not request.user.is_authenticated:
-                return redirect(f"{reverse('app.login')}?next={request.get_full_path()}")
-            gu = _get_gym_user_for_request(request)
-            if not gu:
-                return redirect("app.home")
-            if gu.role not in roles_set:
-                if forbid:
-                    return redirect("app.home")
-                return redirect("app.home")
-            request.gym_user = gu
-            request.user_id = gu.id
-            request.is_admin = (gu.role == "admin")
-            request.is_member = (gu.role == "member")
-            request.is_staff = (gu.role == "staff")
+                login_url = resolve_url(getattr(settings, "LOGIN_URL", "app.login"))
+                return redirect(f"{login_url}?next={request.get_full_path()}")
+
+            # 2) Ensure gym_user exists
+            gp = getattr(request, "gym_user", None)
+            role = getattr(request, "gym_role", None)
+
+            if gp is None or role is None:
+                return render(
+                    request,
+                    "403.html",
+                    {"message": "You do not have a gym profile configured."},
+                    status=403,
+                )
+
+            # 3) Role check
+            if role not in allowed:
+                return render(
+                    request,
+                    "403.html",
+                    {"message": "Your role has not permission to access this page"},
+                    status=403,
+                )
+
+            # All good
             return view_func(request, *args, **kwargs)
+
         return _wrapped
+
     return decorator
 
-def gym_required(view):
-    @wraps(view)
-    def _w(request, *args, **kwargs):
-        if not getattr(request, "gym", None):
-            # redirige a selección de gym
-            return redirect("app.home")
-        return view(request, *args, **kwargs)
-    return _w
+
+def gym_required(view_func: Callable):
+    @wraps(view_func)
+    def _wrapped(request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        if getattr(request, "gym", None) is None:
+            return render(
+                    request,
+                    "403.html",
+                    {"message": "YYou must select a gym before accessing this page."},
+                    status=403,
+                )
+
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped
+
 
 # -----------------------------
 # Formatting helpers

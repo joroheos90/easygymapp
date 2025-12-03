@@ -39,40 +39,49 @@ def home(request):
         posted_gym_id = request.POST.get("gym_id")
 
         if request.is_admin or request.is_staff:
-            # Admin puede seleccionar cualquier gym activo
             gym = get_object_or_404(Gym, pk=posted_gym_id, is_active=True)
         else:
-            # Member: fuerza su propio gym (aunque postee otro id)
-            if getattr(gp, "gym_id", None):
-                gym = get_object_or_404(Gym, pk=gp.gym_id, is_active=True)
-            else:
-                # Sin gym en el perfil: no puede seleccionar otro
+            member_gym_id = getattr(gp, "gym_id", None)
+            if not member_gym_id:
                 return redirect("app.home")
 
-        # Persistir selección
-        request.session["gym_id"] = str(gym.id)
+            gym = get_object_or_404(Gym, pk=member_gym_id, is_active=True)
 
-        # Redirigir según rol
+        request.session["gym_id"] = str(gym.id)
+        request.gym = gym
+
         if request.is_admin:
             return redirect("app.admin")
         if request.is_staff:
             return redirect("app.hours")
-        else:
-            return redirect("app.profile")
+        return redirect("app.profile")
 
-    # GET: lista de gyms según rol
     if request.is_admin or request.is_staff:
-        gyms = Gym.objects.filter(is_active=True).only("id", "name", "address").order_by("name")
+        gyms = (
+            Gym.objects.filter(is_active=True)
+            .only("id", "name", "address")
+            .order_by("name")
+        )
     else:
-        # Solo el gym del miembro (si tiene)
-        if getattr(gp, "gym_id", None):
-            gyms = Gym.objects.filter(id=gp.gym_id, is_active=True).only("id", "name", "address")
+        member_gym_id = getattr(gp, "gym_id", None)
+        if member_gym_id:
+            gyms = (
+                Gym.objects.filter(id=member_gym_id, is_active=True)
+                .only("id", "name", "address")
+            )
         else:
             gyms = Gym.objects.none()
 
     selected_id = getattr(getattr(request, "gym", None), "id", None)
-    return render(request, "app/home.html", {"gyms": gyms, "selected_gym_id": selected_id})
 
+    return render(
+        request,
+        "app/home.html",
+        {
+            "gyms": gyms,
+            "selected_gym_id": selected_id,
+        },
+    )
 
 @login_required
 @role_required(["admin"])
