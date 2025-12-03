@@ -1,4 +1,4 @@
-{% extends "app/base.html" %} {% load customfilters %} {% load humanize %} {% block title %}Horarios{% endblock %} {% block headerTitle %}Horarios{% endblock %} 
+{% extends "app/base.html" %} {% load customfilters %} {% load humanize %} {% block title %}Horarios en {{gym_name}}{% endblock %} {% block headerTitle %}Horarios en {{gym_name}}{% endblock %} 
 {% block headerButtons %}
 <a href="{% url 'app.admin' %}" class="cursor-pointer text-lg font-normal">
     <svg

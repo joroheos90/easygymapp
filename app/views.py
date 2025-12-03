@@ -212,6 +212,7 @@ def base_hours(request):
         "hours": hours,
         "today": today,
         "tomorrow": tomorrow,
+        "gym_name": request.gym.name,
         "already_created_for_today": exists_today or not can_publish(today),
         "already_created_for_tomorrow": exists_tomorrow or not can_publish(tomorrow),
         "week_missing_count": week_missing_count,
@@ -446,6 +447,7 @@ def users(request):
                 "users": out,
                 "filter": filt,
                 "search": search,
+                "gym_name": request.gym.name
             },
         )
 
@@ -586,7 +588,8 @@ def hours(request):
 
     return render(request, "app/hours.html", {"hours": data,
                                                 "prev_date": prev_day.isoformat(),
-                                                "next_date": next_day.isoformat(), 
+                                                "next_date": next_day.isoformat(),
+                                                "gym_name": request.gym.name,
                                                 "date": format_es_date(day, include_weekday=True)})
 
 @login_required
@@ -943,6 +946,7 @@ def payments(request):
         "payments": out,
         "filter": filt,
         "user_id": userid or "",
+        "gym_name": request.gym.name,
     })
 
 # --- Custom Auth Form: solo para renombrar el label de username ---
