@@ -99,7 +99,7 @@
             >
                 <div class="flex flex-col">
                     <span class="text-base font-medium capitalize line-clamp-1"
-                        >{{user.full_name}}</span
+                        >{{user.full_name|lower}}</span
                     >
                     {% if user.paid_current_period %}
                     <span class="text-xs text-gray-500 line-clamp-1"

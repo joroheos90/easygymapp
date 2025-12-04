@@ -43,7 +43,7 @@
             >
                 <option value="">Miembro</option>
                 {% for u in users %}
-                    <option class="capitalize" value="{{ u.id }}" {% if initial.user_id == u.id %}selected{% endif %}>{{ u.full_name }}</option>
+                    <option class="capitalize" value="{{ u.id }}" {% if initial.user_id == u.id %}selected{% endif %}>{{ u.full_name|lower }}</option>
                 {% endfor %}
             </select>
         </div>

@@ -37,7 +37,7 @@
             {{user.full_name|initials}}
         </div>
         <div class="flex w-full flex-col items-center gap-2">
-            <h1 class="text-3xl capitalize text-center font-bold">{{user.full_name}}</h1>
+            <h1 class="text-3xl capitalize text-center font-bold">{{user.full_name|lower}}</h1>
             {% if user.has_paid %}
             <h2 class="text-base text-center text-gray-500">
                 Próximo pago {{user.next_payment_date}}
