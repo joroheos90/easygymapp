@@ -105,6 +105,7 @@ class BaseTimeslot(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+    start_time = models.TimeField(null=True, blank=True)
 
     class Meta:
         db_table = "base_timeslots"
@@ -139,6 +140,7 @@ class DailyTimeslot(models.Model):
     day_order = models.PositiveIntegerField(blank=False, default=0)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
     created_at = models.DateTimeField(default=timezone.now)
+    start_time = models.TimeField(null=True, blank=True)
 
     class Meta:
         db_table = "daily_timeslots"

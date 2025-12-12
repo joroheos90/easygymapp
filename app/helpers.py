@@ -134,3 +134,9 @@ def format_es_date(
 
     return text
 
+def slot_start_dt(slot):
+    if not slot.start_time:
+        return None
+    tz = timezone.get_current_timezone()
+    naive = datetime.combine(slot.slot_date, slot.start_time)
+    return timezone.make_aware(naive, tz) if timezone.is_naive(naive) else naive
