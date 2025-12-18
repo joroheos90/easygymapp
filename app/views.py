@@ -280,8 +280,8 @@ def selector(request):
                     elif slot_start <= now:
                         error = "Este horario ya inició o ya pasó."
                     else:
-                        join_deadline = slot_start - timedelta(hours=2)     # Join/change allowed only if >= 2h remain
-                        cancel_deadline = slot_start - timedelta(hours=1)   # Cancel allowed only if > 1h remain
+                        join_deadline = slot_start - timedelta(hours=1)     # Join/change allowed only if >= 1h remain
+                        cancel_deadline = slot_start - timedelta(minutes=30)   # Cancel allowed only if > 30m remain
 
                         # English: Lock the user's existing signup for that day (if any).
                         existing = (
@@ -300,10 +300,10 @@ def selector(request):
                                 existing.delete()
                                 success = "Se canceló tu registro con éxito."
 
-                        # CASE 2: User is joining or switching to a different slot -> JOIN (with 2-hour rule)
+                        # CASE 2: User is joining or switching to a different slot -> JOIN (with 1-hour rule)
                         else:
                             if now >= join_deadline:
-                                error = "No puedes inscribirte a este horario si faltan menos de 2 horas para que inicie."
+                                error = "No puedes inscribirte a este horario si falta menos de 1 hora para que inicie."
                             else:
                                 # English: If switching from a previous slot, verify cancellation window (> 1h left)
                                 if existing and existing.daily_slot_id != slot.id:
