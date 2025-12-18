@@ -63,7 +63,8 @@
                 <span class="text-base uppercase font-bold"
                     >{{hour.title}}</span
                 >
-                <span
+                <div class="flex flex-row gap-4">
+                    <span
                     class="flex items-center gap-1 text-base font-medium {% if hour.enrolled == 0 %} text-gray-600 {% elif hour.enrolled == hour.capacity %} text-red-600 {% else %} text-green-600 {% endif %}"
                     >{{hour.enrolled}}
                     <svg
@@ -81,6 +82,14 @@
                         />
                     </svg>
                 </span>
+                <form method="post" >
+                    {% csrf_token %}
+                    <input type="hidden" name="hour_id" value="{{hour.id}}">
+                    <button class="flex cursor-pointer h-6 w-[50px] text-nowrap items-center justify-center rounded-[4px] {% if hour.status == 'open' %} bg-red-500 {% else %} bg-green-500 {% endif %} text-[10px] leading-none font-bold text-white">
+                        {% if hour.status == 'open' %} Cerrar {% else %} Abrir  {% endif %}
+                    </button>
+                </form>
+                </div>
             </div>
             <div class="flex flex-col gap-2">
                 {% for user in hour.users %}

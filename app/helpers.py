@@ -23,6 +23,8 @@ def role_required(allowed_roles: Iterable[str]):
             # 2) Ensure gym_user exists
             gp = getattr(request, "gym_user", None)
             role = getattr(request, "gym_role", None)
+            print(gp)
+            print(role)
 
             if gp is None or role is None:
                 return render(

@@ -131,14 +131,14 @@ def base_hours(request):
         return day.weekday() not in AVOID_WEEKDAYS
 
     def publish_for_day(day: date) -> tuple[int, int]:
-        """Crea DailyTimeslot desde BaseTimeslot para un día. Devuelve (created, skipped)."""
+        """Create DailyTimeslot from BaseTimeslot for a given day. Returns (created, skipped)."""
         if not can_publish(day):
             return (0, 0)
 
         created = skipped = 0
         base_qs = (
             BaseTimeslot.objects
-            .only("id", "title", "capacity", "is_active", "start_time")
+            .only("id", "title", "capacity", "is_active", "start_time", "day_order")
             .filter(gym=request.gym, is_active=True)
         )
         for b in base_qs:
@@ -162,6 +162,28 @@ def base_hours(request):
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
+
+        if action == "activation":
+            hour_id = (request.POST.get("hour_id") or "").strip()
+            if not hour_id:
+                return HttpResponseBadRequest("Missing hour_id")
+
+            base_hour = (
+                BaseTimeslot.objects
+                .filter(gym=request.gym, id=hour_id)
+                .only("id", "is_active")
+                .first()
+            )
+            if not base_hour:
+                return HttpResponseBadRequest("Base hour not found")
+
+            # Toggle is_active
+            base_hour.is_active = not base_hour.is_active
+            base_hour.save(update_fields=["is_active"])
+
+            return redirect("app.base_hours")
+
+        # 2) Publishing logic
         created_total = skipped_total = 0
         avoided_days = 0
 
@@ -206,11 +228,9 @@ def base_hours(request):
         for h in qs
     ]
 
-    # Flags para hoy/mañana (si son fin de semana, márcalos como ya “no publicables”)
     exists_today = DailyTimeslot.objects.filter(gym=request.gym, slot_date=today).exists()
     exists_tomorrow = DailyTimeslot.objects.filter(gym=request.gym, slot_date=tomorrow).exists()
 
-    # Semana: contar solo días publicables que falten
     week_days = [today + timedelta(days=i) for i in range(0, 7)]
     week_missing = [
         d for d in week_days
@@ -226,9 +246,10 @@ def base_hours(request):
         "already_created_for_today": exists_today or not can_publish(today),
         "already_created_for_tomorrow": exists_tomorrow or not can_publish(tomorrow),
         "week_missing_count": week_missing_count,
-        "avoid_weekdays": sorted(AVOID_WEEKDAYS),  # opcional por si lo quieres mostrar
+        "avoid_weekdays": sorted(AVOID_WEEKDAYS),
     }
     return render(request, "app/base_hours.html", ctx)
+
 
 
 @login_required
@@ -373,7 +394,7 @@ def selector(request):
 
     slots = (
         DailyTimeslot.objects
-        .filter(gym=request.gym, slot_date=day)
+        .filter(gym=request.gym, slot_date=day, status=DailyTimeslot.Status.OPEN)
         .annotate(enrolled=Count("signups"))
         .order_by("day_order")
         .only("id", "slot_date", "title", "capacity", "status", "start_time")
@@ -617,6 +638,26 @@ def profile(request):
 @role_required(["admin", "staff"])
 @gym_required
 def hours(request):
+    if request.method == "POST":
+        hour_id = request.POST.get("hour_id")
+        hour = (
+                DailyTimeslot.objects
+                .filter(gym=request.gym, id=hour_id)
+                .only("id", "status")
+                .first()
+            )
+        if not hour:
+            return HttpResponseBadRequest("hour not found")
+        
+        if hour.status == DailyTimeslot.Status.OPEN:
+            hour.status = DailyTimeslot.Status.CANCELLED
+        else:
+            hour.status = DailyTimeslot.Status.OPEN
+
+        hour.save(update_fields=["status"])
+        return redirect("app.hours")
+        
+
     q = request.GET.get("date")
     day = parse_date(q) if q else None
     if day is None:

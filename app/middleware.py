@@ -5,6 +5,7 @@ from app.models import Gym
 
 class GymUserMiddleware(MiddlewareMixin):
     def process_request(self, request):
+        print("antes")
         request.gym_user = None
         request.gym_role = None
         request.user_id = None
@@ -13,7 +14,9 @@ class GymUserMiddleware(MiddlewareMixin):
         request.is_member = False
 
         if request.user.is_authenticated:
+            print("esta authenticado")
             gp = getattr(request.user, "gym_profile", None)
+            print(gp)
             if gp is not None:
                 request.gym_user = gp
                 role = getattr(gp, "role", None)

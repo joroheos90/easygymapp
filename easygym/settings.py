@@ -149,8 +149,7 @@ LOGIN_REDIRECT_URL = "app.home"
 LOGOUT_REDIRECT_URL = "app.login"
 LOGIN_URL = "app.login"
 
-# Sesión persistente (3 semanas aprox.)
-SESSION_COOKIE_AGE = 60 * 60 * 24 * 21  # 21 días
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30 * 6  # ~6 meses (180 días)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_SAVE_EVERY_REQUEST = True  # refresca expiración en cada request
 
