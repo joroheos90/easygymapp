@@ -669,7 +669,7 @@ def staff_profile(request):
         return HttpResponseBadRequest("userid inválido")
 
     user = get_object_or_404(
-        GymUser.objects.filter(gym=request.gym, role="staff").only(
+        GymUser.objects.filter(role="staff").only(
             "id", "full_name", "join_date", "phone",
             "is_active", "created_at", "updated_at",
         ),
