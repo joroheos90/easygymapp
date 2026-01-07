@@ -79,10 +79,9 @@ class SlotStatus:
 # ---------- Service ----------
 class GymService:
     @transaction.atomic
-    def crear_gymuser_y_user(gym, full_name: str, is_active: bool = True, password: str = "gim12345"):
+    def crear_gymuser_y_user(gym, full_name: str, is_active: bool = True, password: str = "gim12345", role="member"):
         UserModel = get_user_model()
 
-        # 1) Crear auth.User con username temporal único
         tmp_username = f"tmp-{uuid4().hex}"
         u = UserModel.objects.create_user(username=tmp_username, password=password)
         parts = (full_name or "").strip().split(" ", 1)
@@ -91,17 +90,15 @@ class GymService:
         u.is_active  = is_active
         u.save(update_fields=["first_name", "last_name", "is_active"])
 
-        # 2) Crear GymUser ENLAZADO (evita NOT NULL)
         g = GymUser.objects.create(
             gym=gym,
             user=u,
             full_name=full_name or "Sin nombre",
-            role="member",
+            role=role,
             join_date=timezone.localdate(),
             is_active=is_active,
         )
 
-        # 3) Ajustar username definitivo = id del GymUser
         final_username = str(g.id)
         if u.username != final_username:
             u.username = final_username

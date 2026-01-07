@@ -434,7 +434,6 @@ def selector(request):
     return render(request, "app/hourselection.html", ctx)
 
 
-
 def _current_period_for(user: GymUser, ref: date | None = None) -> tuple[date, date]:
     today = ref or timezone.localdate()
     anchor = user.join_date.day
@@ -455,6 +454,28 @@ def _current_period_for(user: GymUser, ref: date | None = None) -> tuple[date, d
     end = start + relativedelta(months=1)
 
     return start, end
+
+@login_required
+@role_required(["admin"])
+def staff(request):
+    staff_users = (
+    GymUser.objects
+    .filter(
+            is_active=True,
+            role="staff"
+        )
+        .only("id", "full_name", "join_date")
+        .order_by("full_name")
+    )
+
+    return render(
+        request,
+        "app/staff.html",
+        {
+            "users": staff_users
+        },
+    )
+
 
 @login_required
 @role_required(["admin"])
@@ -546,7 +567,6 @@ def users(request):
 
 
 
-
 @login_required
 @gym_required
 @role_required(["admin", "member"])
@@ -633,6 +653,40 @@ def profile(request):
         }
     }
     return render(request, "app/profile.html", ctx)
+
+
+@login_required
+@gym_required
+@role_required(["admin"])
+def staff_profile(request):    
+    raw = request.GET.get("userid")
+    if not raw:
+        return HttpResponseBadRequest("Falta el parámetro ?userid")
+
+    try:
+        user_id = int(raw)
+    except (TypeError, ValueError):
+        return HttpResponseBadRequest("userid inválido")
+
+    user = get_object_or_404(
+        GymUser.objects.filter(gym=request.gym, role="staff").only(
+            "id", "full_name", "join_date", "phone",
+            "is_active", "created_at", "updated_at",
+        ),
+        pk=user_id,
+    )
+
+    ctx = {
+        "user": {
+            "id": user.id,
+            "full_name": user.full_name,
+            "phone": getattr(user, "phone", None),
+            "join_date": format_es_date(user.join_date, include_year=True),
+            "is_active": user.is_active,
+        }
+    }
+    return render(request, "app/staff_profile.html", ctx)
+
 
 @login_required
 @role_required(["admin", "staff"])
@@ -796,6 +850,66 @@ def user(request):
         "height_cm": member.height_cm if member else None,
     }
     return render(request, "app/editprofile.html", ctx)
+
+
+@login_required
+@role_required(["admin"])
+@gym_required
+def edit_staff_profile(request):
+    raw = request.GET.get("userid")
+    member = None
+    if raw:
+        try:
+            member_id = int(raw)
+        except (TypeError, ValueError):
+            return HttpResponseBadRequest("userid inválido")
+        member = get_object_or_404(GymUser, pk=member_id)
+
+    if request.method == "POST":
+        if request.POST.get("action") == "delete":
+            if not member:
+                return HttpResponseBadRequest("No puedes borrar: usuario no encontrado")
+            # borra GymUser (OneToOne con on_delete=CASCADE borrará también el auth.User)
+            member.delete()
+            return redirect("app.staff")
+
+        # ---- datos del form ----
+        first_name = (request.POST.get("first_name") or "").strip()
+        last_name  = (request.POST.get("last_name") or "").strip()
+        full_name  = (first_name + " " + last_name).strip() or "Sin nombre"
+
+        phone      = (request.POST.get("phone") or "").strip() or None
+        join_date  = parse_date(request.POST.get("join_date") or "") or timezone.localdate()
+        is_active  = True
+
+        if member is None:
+            member, auth_u = GymService.crear_gymuser_y_user(gym=request.gym, full_name=full_name, is_active=is_active, password="visan12345", role="staff")
+            member.phone = phone
+            member.join_date = join_date
+            member.save(update_fields=["phone", "join_date", "updated_at", "gym_id"])
+        else:
+            member.full_name  = full_name
+            member.phone      = phone
+            member.join_date  = join_date
+            member.is_active  = is_active
+            member.save(update_fields=["full_name", "phone", "join_date", "is_active", "updated_at"])
+
+
+        base_url = reverse("app.staff_profile")
+        query = urlencode({"userid": member.id})
+        return redirect(f"{base_url}?{query}")
+
+    ctx = {
+        "is_edit": bool(member),
+        "userid": member.id if member else None,
+        "full_name": member.full_name if member else None,
+        "first_name": (member.full_name.split(" ", 1)[0] if member else ""),
+        "last_name":  (member.full_name.split(" ", 1)[1] if (member and " " in member.full_name) else ""),
+        "phone": member.phone if member else "",
+        "join_date": member.join_date.isoformat() if (member and member.join_date) else timezone.localdate().isoformat(),
+    }
+    return render(request, "app/editstaff_profile.html", ctx)
+
 
 METHOD_CHOICES = [
     ("efectivo", "Efectivo"),

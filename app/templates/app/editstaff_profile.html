@@ -1,0 +1,162 @@
+{% extends "app/base.html" %} {% load customfilters %} {% block title %}
+{{is_edit|yesno:"Editar Miembro,Nuevo Miembro" }}{% endblock %} 
+{% block headerTitle %}Perfil{% endblock %} {% block headerButtons %}
+<a
+    href="{% url 'app.users' %}?userid={{userid}}"
+    class="cursor-pointer text-lg font-normal text-blue-500"
+    >Cancelar</a
+>
+<button form="user-form" class="cursor-pointer text-lg font-bold text-blue-500">
+    Guardar
+</button>
+{% endblock %} {% block content %}
+<form
+    id="user-form"
+    method="post"
+    class="flex flex-col gap-6 px-4 py-4 pb-6 font-roboto"
+>
+    {% csrf_token %}
+
+    <div
+        class="h-[140px] mx-auto min-h-[140px] bg-blue-400 text-[70px] font-bold flex items-center justify-center w-[140px] min-w-[140px] rounded-full"
+    >
+        {{full_name|initials}}
+    </div>
+
+    <div class="flex flex-col gap-4">
+        <div class="flex flex-col rounded-[8px] bg-white px-4">
+            <input
+                type="text"
+                name="first_name"
+                value="{{ first_name }}"
+                class="w-full border-b border-gray-300 px-1 py-3 text-base font-normal capitalize ring-0 focus:ring-0 focus:outline-none"
+                placeholder="Nombre"
+                autocomplete="off"
+            />
+            <input
+                type="text"
+                name="last_name"
+                value="{{ last_name }}"
+                class="w-full px-1 py-3 text-base font-normal capitalize ring-0 focus:ring-0 focus:outline-none"
+                placeholder="Apellidos"
+                autocomplete="off"
+            />
+        </div>
+
+        <div class="flex flex-col rounded-[8px] bg-white px-4">
+            <input
+                type="text"
+                name="phone"
+                value="{{ phone }}"
+                class="w-full appearance-none border-b border-gray-300 px-1 py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+                placeholder="Teléfono"
+                autocomplete="tel"
+            />
+            <div class="relative">
+                <span class="absolute top-4 text-xs">Ingreso</span>
+
+                <input
+                    type="date"
+                    name="join_date"
+                    value="{{join_date}}"
+                    style="
+                        padding-left: 44px;
+                        padding-top: 12px;
+                        padding-bottom: 12px;
+                        height: 48px;
+                        min-height: 48px;
+                        line-height: 24px;
+                    "
+                    {% if request.is_member %}disabled{% endif %}
+                    class="w-full py-3 disabled:bg-gray-200 disabled:text-gray-400 pl-11 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+                />
+            </div>
+        </div>
+    </div>
+</form>
+
+{% if is_edit %}
+<form
+    method="post"
+    class="flex flex-col items-center rounded-[8px] bg-white mx-4 px-4 py-2 my-4"
+    onsubmit="return confirm('¿Seguro que quieres borrar este entrenador? Esta acción no se puede deshacer.');"
+>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="delete" />
+    <button
+        type="submit"
+        class="cursor-pointer font-normal text-red-500 text-left"
+    >
+        Borrar Entrenador
+    </button>
+</form>
+{% endif %}
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+      // Toma el input por name (funciona sin id). Cambia a '#phone' si le pones id.
+      const el = document.querySelector('input[name="phone"]');
+      if (!el) return;
+    
+      const onlyDigits = (s) => (s || "").replace(/\D+/g, "");
+      const formatCR = (s) => {
+        const raw = onlyDigits(s).slice(0, 8);     // máx 8 dígitos
+        if (!raw) return "";
+        if (raw.length <= 4) return raw;           // "1234"
+        return raw.slice(0, 4) + "-" + raw.slice(4); // "1234-5678"
+      };
+    
+      function setFieldError(msg) {
+        let hint = el.nextElementSibling;
+        if (!hint || !hint.classList.contains("field-hint")) {
+          hint = document.createElement("div");
+          hint.className = "field-hint text-xs mt-1";
+          el.insertAdjacentElement("afterend", hint);
+        }
+        hint.textContent = msg || "";
+        hint.style.color = msg ? "#dc2626" : ""; // rojo si hay error
+      }
+    
+      // Formateo al cargar
+      el.value = formatCR(el.value);
+    
+      // Mientras escriben/pegan
+      el.addEventListener("input", function () {
+        const before = el.value;
+        const formatted = formatCR(before);
+        if (before !== formatted) {
+          el.value = formatted;
+          // Cursor al final (simple y robusto en móvil)
+          el.setSelectionRange(el.value.length, el.value.length);
+        }
+        // Feedback suave
+        const len = onlyDigits(el.value).length;
+        if (len > 0 && len !== 8) setFieldError("El teléfono debe tener 8 dígitos.");
+        else setFieldError("");
+      });
+    
+      // Al salir del campo
+      el.addEventListener("blur", function () {
+        el.value = formatCR(el.value);
+        const len = onlyDigits(el.value).length;
+        if (len !== 8) setFieldError("El teléfono debe tener 8 dígitos.");
+      });
+    
+      // Enviar sin guion
+      const form = el.closest("form");
+      if (form) {
+        form.addEventListener("submit", function (e) {
+          const raw = onlyDigits(el.value);
+          if (raw.length !== 8) {
+            e.preventDefault();
+            setFieldError("El teléfono debe tener 8 dígitos.");
+            el.focus();
+            return;
+          }
+          el.value = raw; // "12345678" para el servidor
+        });
+      }
+    });
+    </script>
+    
+{% endblock %}
