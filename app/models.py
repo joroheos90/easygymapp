@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.conf import settings
+from .activity.event_types import ActivityEventType
 
 class Gym(models.Model):
     id = models.BigAutoField(primary_key=True)
@@ -191,3 +192,25 @@ class UserWeight(models.Model):
         indexes = [
             models.Index(fields=["gym", "user", "recorded_at"]),
         ]
+
+
+class ActivityLog(models.Model):
+    gym = models.ForeignKey(Gym, on_delete=models.CASCADE, related_name="activity_logs",
+                            null=True, blank=True)
+
+    actor_id = models.PositiveIntegerField(null=True, blank=True)
+    actor_name = models.CharField(max_length=255)
+
+    event_type = models.CharField(
+        max_length=50,
+        choices=ActivityEventType.choices
+    )
+
+    message = models.TextField()
+    metadata = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+

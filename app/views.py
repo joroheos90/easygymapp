@@ -1,6 +1,7 @@
 # Standard library
 import logging
 from calendar import monthrange
+from django.utils.timesince import timesince
 from datetime import date, timedelta
 from urllib.parse import urlencode
 
@@ -25,7 +26,9 @@ from django.views.decorators.http import require_http_methods
 # Local
 from app.services import GymService
 from .helpers import format_es_date, gym_required, role_required, signed_at_parts, slot_start_dt
-from .models import BaseTimeslot, DailyTimeslot, Gym, GymUser, Payment, TimeslotSignup
+from .models import BaseTimeslot, DailyTimeslot, Gym, GymUser, Payment, TimeslotSignup, ActivityLog
+from .activity.helpers import log_activity
+from .activity.event_types import ActivityEventType
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +183,15 @@ def base_hours(request):
             # Toggle is_active
             base_hour.is_active = not base_hour.is_active
             base_hour.save(update_fields=["is_active"])
+            log_activity(
+                gym=request.gym,
+                actor=request.user,
+                event_type=ActivityEventType.BASE_SCHEDULE_ACTIVATE 
+                    if base_hour.is_active else ActivityEventType.BASE_SCHEDULE_DEACTIVATE,
+                metadata={
+                    "title": base_hour.title,
+                }
+            )
 
             return redirect("app.base_hours")
 
@@ -319,6 +331,15 @@ def selector(request):
                                 error = "No puedes cancelar si falta 1 hora o menos para que inicie el horario."
                             else:
                                 existing.delete()
+                                log_activity(
+                                            gym=request.gym,
+                                            actor=request.user,
+                                            event_type=ActivityEventType.GROUP_LEAVE,
+                                            metadata={
+                                                "group_title": slot.title,
+                                                "group_date": slot.slot_date.strftime("%d/%m/%Y"),
+                                            }
+                                        )
                                 success = "Se canceló tu registro con éxito."
 
                         # CASE 2: User is joining or switching to a different slot -> JOIN (with 1-hour rule)
@@ -369,6 +390,15 @@ def selector(request):
                                             user=request.gym_user,
                                             slot_date=slot.slot_date,  # NOT NULL
                                             signed_at=timezone.now(),
+                                        )
+                                        log_activity(
+                                            gym=request.gym,
+                                            actor=request.user,
+                                            event_type=ActivityEventType.GROUP_JOIN,
+                                            metadata={
+                                                "group_title": slot.title,
+                                                "group_date": slot.slot_date.strftime("%d/%m/%Y"),
+                                            }
                                         )
                                         success = "Registro completado con éxito."
 
@@ -784,6 +814,15 @@ def user(request):
                 return HttpResponseBadRequest("No puedes borrar: usuario no encontrado")
             # borra GymUser (OneToOne con on_delete=CASCADE borrará también el auth.User)
             member.delete()
+            log_activity(
+                gym=request.gym,
+                actor=request.user,
+                event_type=ActivityEventType.MEMBER_REMOVE,
+                metadata={
+                    "member_name": member.full_name,
+                }
+            )
+
             return redirect("app.users")
 
         # ---- datos del form ----
@@ -806,6 +845,14 @@ def user(request):
             member.join_date = join_date
             member.height_cm = height_cm
             member.save(update_fields=["phone", "birth_date", "join_date", "height_cm", "updated_at", "gym_id"])
+            log_activity(
+                gym=request.gym,
+                actor=request.user,
+                event_type=ActivityEventType.MEMBER_ADD,
+                metadata={
+                    "member_name": full_name,
+                }
+            )
         else:
             # Update GymUser
             member.full_name  = full_name
@@ -815,7 +862,15 @@ def user(request):
             member.height_cm  = height_cm
             member.is_active  = is_active
             member.save(update_fields=["full_name", "phone", "birth_date", "join_date", "height_cm", "is_active", "updated_at"])
-
+            log_activity(
+                gym=request.gym,
+                actor=request.user,
+                event_type=ActivityEventType.PROFILE_UPDATE,
+                metadata={
+                    "fields": ["first name", "last name", "phone"],
+                    "member_name": member.full_name,
+                }
+            )
             # Sync con auth.User si está enlazado
             if member.user_id:
                 au = member.user
@@ -975,6 +1030,17 @@ def payment(request):
             if not payment:
                 return HttpResponseBadRequest("No puedes borrar: payment no encontrado")
             payment.delete()
+            log_activity(
+                gym=request.gym,
+                actor=request.user,
+                event_type=ActivityEventType.PAYMENT_REMOVE,
+                metadata={
+                    "member_name": payment.user.full_name,
+                    "period": payment.period_label,
+                    "amount": payment.amount,
+                    "method": payment.method,
+                }
+            )
             return redirect("app.payments")
 
         # --- leer form ---
@@ -1045,6 +1111,17 @@ def payment(request):
                 period_end=period_end,
                 period_label=period_label,
                 notes=notes,
+            )
+            log_activity(
+                gym=request.gym,
+                actor=request.user,
+                event_type=ActivityEventType.PAYMENT_ADD,
+                metadata={
+                    "member_name": user.full_name,
+                    "period": period_label,
+                    "amount": amount,
+                    "method": method,
+                }
             )
             if pref_user_id:
                 return redirect(f"{reverse('app.payments')}?userid={pref_user_id}")
@@ -1196,13 +1273,19 @@ class AppLoginView(LoginView):
     # Mantén sesión abierta N días desde settings; si quieres forzarlo aquí:
     def form_valid(self, form):
         response = super().form_valid(form)
-        # Si quisieras un valor distinto al global:
-        # self.request.session.set_expiry(60 * 60 * 24 * 21)
+        log_activity(
+                actor=self.request.user,
+                event_type=ActivityEventType.LOGIN,
+            )
         return response
     
 
 # --- Logout ---
 def logout_view(request):
+    log_activity(
+        actor=request.user,
+        event_type=ActivityEventType.LOGOUT,
+    )
     logout(request)
     return redirect("app.login")
 
@@ -1212,7 +1295,41 @@ class MemberPasswordChangeView(PasswordChangeView):
     form_class = PasswordChangeForm
     success_url = reverse_lazy("app.home")  # vuelve al home después de cambiar
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+
+        log_activity(
+            actor=self.request.user,
+            event_type=ActivityEventType.PASSWORD_CHANGE,
+        )
+
+        return response
+
 
 @require_http_methods(["GET", "POST"])
 def public_join_by_gym(request, gym_id: int):
     return redirect("app.home")
+
+@gym_required
+@login_required
+@role_required(["admin"])
+def activity(request):
+    logs = ActivityLog.objects.all()[:50]
+
+    activities = [
+        {
+            "text": log.message,
+            "time_ago": "hace " + timesince(log.created_at),
+            "event_type": log.event_type,
+            "created_at": log.created_at,
+        }
+        for log in logs
+    ]
+
+    return render(
+        request,
+        "app/activity.html",
+        {"activities": activities,
+        "gym_name": request.gym.name,
+        }
+    )
