@@ -21,8 +21,6 @@ def _schedule_label(meta):
     return f"{meta['title']}"
 
 
-
-
 def build_message(event_type, actor_name, metadata):
     match event_type:
         case ActivityEventType.LOGIN:
@@ -70,6 +68,18 @@ def build_message(event_type, actor_name, metadata):
             return (
                 f"{_actor(actor_name)} eliminó al miembro "
                 f"<b>{metadata['member_name']}</b>"
+            )
+        
+        case ActivityEventType.COUCH_REMOVE:
+            return (
+                f"{_actor(actor_name)} eliminó al entrenador "
+                f"<b>{metadata['couch_name']}</b>"
+            )
+        
+        case ActivityEventType.COUCH_ADD:
+            return (
+                f"{_actor(actor_name)} agregó al entrenador "
+                f"<b>{metadata['couch_name']}</b>"
             )
 
         case ActivityEventType.BASE_SCHEDULE_ACTIVATE:

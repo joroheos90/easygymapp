@@ -14,6 +14,9 @@ class ActivityEventType(TextChoices):
     MEMBER_ADD = "member_add", "Alta de miembro"
     MEMBER_REMOVE = "member_remove", "Baja de miembro"
 
+    COUCH_ADD = "couch_add", "Alta de entrenador"
+    COUCH_REMOVE = "couch_remove", "Baja de entrenador"
+
     BASE_SCHEDULE_ACTIVATE = "base_schedule_activate", "Activar horario base"
     BASE_SCHEDULE_DEACTIVATE = "base_schedule_deactivate", "Desactivar horario base"
 

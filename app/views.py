@@ -926,6 +926,13 @@ def edit_staff_profile(request):
                 return HttpResponseBadRequest("No puedes borrar: usuario no encontrado")
             # borra GymUser (OneToOne con on_delete=CASCADE borrará también el auth.User)
             member.delete()
+            log_activity(
+                actor=request.user,
+                event_type=ActivityEventType.COUCH_REMOVE,
+                metadata={
+                    "couch_name": member.full_name,
+                }
+            )
             return redirect("app.staff")
 
         # ---- datos del form ----
@@ -942,6 +949,13 @@ def edit_staff_profile(request):
             member.phone = phone
             member.join_date = join_date
             member.save(update_fields=["phone", "join_date", "updated_at", "gym_id"])
+            log_activity(
+                actor=request.user,
+                event_type=ActivityEventType.COUCH_ADD,
+                metadata={
+                    "couch_name": member.full_name,
+                }
+            )
         else:
             member.full_name  = full_name
             member.phone      = phone

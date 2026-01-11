@@ -1,7 +1,7 @@
 {% extends "app/base.html" %}
 {% load customfilters %}
 {% block title %}Asistencias en {{gym_name}}{% endblock %} {% block headerTitle %}Asistencias en {{gym_name}}{% endblock %} {% block headerButtons %}
-<a href="{% url 'app.admin' %}" class="cursor-pointer text-lg font-normal">
+<a href="{%if request.is_admin %}{% url 'app.admin' %}{% else %}{%url 'app.home' %}{%endif %}" class="cursor-pointer text-lg font-normal">
     <svg
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
