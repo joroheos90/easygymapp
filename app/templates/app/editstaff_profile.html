@@ -2,7 +2,7 @@
 {{is_edit|yesno:"Editar Miembro,Nuevo Miembro" }}{% endblock %} 
 {% block headerTitle %}Perfil{% endblock %} {% block headerButtons %}
 <a
-    href="{% url 'app.staff_profile' %}?userid={{userid}}"
+    href="{% if is_edit %}{% url 'app.staff_profile' %}?userid={{userid}}{% else %}{% url 'app.staff' %}{% endif %}"
     class="cursor-pointer text-lg font-normal text-blue-500"
     >Cancelar</a
 >
