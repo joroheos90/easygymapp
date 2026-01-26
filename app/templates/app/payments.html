@@ -105,6 +105,10 @@ class="cursor-pointer text-lg font-normal">
                 </div>
             </div>
             {% endif %}
+        {% empty %}
+        <div class="text-sm text-gray-500 py-4 text-center">
+            No hay pagos registrados
+        </div>
         {% endfor %}
     </div>
 </div>
