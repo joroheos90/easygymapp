@@ -13,6 +13,8 @@ urlpatterns = [
     path("staff-profile", views.staff_profile, name="app.staff_profile"),
     path("edit-staff-profile", views.edit_staff_profile, name="app.edit_staff_profile"),
     path("activity", views.activity, name="app.activity"),
+    path("measurements", views.measurements, name="app.measurements"),
+    path("measurement", views.measurement_form, name="app.measurement"),
 
     #members
     path("selector", views.selector, name="app.selector"),

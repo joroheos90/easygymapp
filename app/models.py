@@ -179,21 +179,6 @@ class TimeslotSignup(models.Model):
         ]
 
 
-class UserWeight(models.Model):
-    id = models.BigAutoField(primary_key=True)
-    gym = models.ForeignKey(Gym, on_delete=models.CASCADE, related_name="weights",
-                            null=False, blank=False)  # <-- Fase 1: NULLABLE
-    user = models.ForeignKey(GymUser, on_delete=models.CASCADE, related_name="weights")
-    weight_kg = models.DecimalField(max_digits=5, decimal_places=2)
-    recorded_at = models.DateTimeField(default=timezone.now)
-
-    class Meta:
-        db_table = "user_weights"
-        indexes = [
-            models.Index(fields=["gym", "user", "recorded_at"]),
-        ]
-
-
 class ActivityLog(models.Model):
     gym = models.ForeignKey(Gym, on_delete=models.CASCADE, related_name="activity_logs",
                             null=True, blank=True)
@@ -214,3 +199,92 @@ class ActivityLog(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
+
+class MeasurementDefinition(models.Model):
+    class UnitType(models.TextChoices):
+        CM = "cm", "Centímetros"
+        KG = "kg", "Kilogramos"
+        PERCENT = "percent", "Porcentaje"
+        TEXT = "text", "Texto"
+        NUMBER = "number", "Número"
+
+    id = models.BigAutoField(primary_key=True)
+
+    name = models.CharField(max_length=80)
+
+    unit_type = models.CharField(
+        max_length=20,
+        choices=UnitType.choices
+    )
+
+    is_required = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "measurement_definitions"
+        indexes = [
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["unit_type"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.unit_type})"
+
+
+class MeasurementRecord(models.Model):
+    id = models.BigAutoField(primary_key=True)
+
+    gym = models.ForeignKey(
+        Gym,
+        on_delete=models.CASCADE,
+        related_name="measurement_records"
+    )
+    user = models.ForeignKey(
+        GymUser,
+        on_delete=models.CASCADE,
+        related_name="measurement_records"
+    )
+
+    record_date = models.DateField()
+    notes = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "measurement_records"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["gym", "user", "record_date"],
+                name="uniq_measurement_record_user_date"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["gym", "user", "record_date"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.gym_id}] {self.user_id} {self.record_date}"
+
+
+class MeasurementValue(models.Model):
+    id = models.BigAutoField(primary_key=True)
+
+    record = models.ForeignKey(
+        MeasurementRecord,
+        on_delete=models.CASCADE,
+        related_name="values"
+    )
+
+    # Snapshot inmutable
+    definition_name = models.CharField(max_length=80)
+    unit_type = models.CharField(max_length=20)
+
+    value = models.CharField(max_length=64)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "measurement_values"
+
+    def __str__(self):
+        return f"{self.definition_name}: {self.value}"
