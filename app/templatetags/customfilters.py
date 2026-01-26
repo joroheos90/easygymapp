@@ -24,3 +24,9 @@ def add_class(field, css_class):
             field.value() or ''
         )
     return field
+
+@register.filter
+def get_item(d, key):
+    if not d:
+        return ""
+    return d.get(key, "")
