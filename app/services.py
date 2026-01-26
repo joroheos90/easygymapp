@@ -17,7 +17,6 @@ from .models import (
     BaseTimeslot,
     DailyTimeslot,
     TimeslotSignup,
-    UserWeight,
 )
 
 
@@ -200,21 +199,6 @@ class GymService:
         user = GymService.get_user(user_id)
         return user.payments.order_by("-paid_at")
 
-    # ===== WEIGHT =====
-    @staticmethod
-    def add_weight(*, user_id: int, weight_kg: float,
-                   recorded_at: Optional[timezone.datetime] = None) -> UserWeight:
-        user = GymService.get_user(user_id)
-        return UserWeight.objects.create(
-            user=user,
-            weight_kg=weight_kg,
-            recorded_at=recorded_at or timezone.now(),
-        )
-
-    @staticmethod
-    def list_weights(user_id: int):
-        user = GymService.get_user(user_id)
-        return user.weights.order_by("-recorded_at")
 
     # ===== BASE TIMESLOTS =====
     @staticmethod

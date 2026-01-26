@@ -1,0 +1,116 @@
+{% extends "app/base.html" %}
+
+{% block title %}
+{{ is_edit|yesno:"Editar Medida,Nueva medida" }}
+{% endblock %}
+
+{% block headerTitle %}Medida{% endblock %}
+
+{% block headerButtons %}
+<a
+    href="{% url 'app.measurements' %}"
+    class="cursor-pointer text-lg font-normal text-blue-500"
+>
+    Cancelar
+</a>
+
+<button form="definition-form"
+    class="cursor-pointer text-lg font-bold text-blue-500">
+    Guardar
+</button>
+{% endblock %}
+
+{% block content %}
+<form
+    id="definition-form"
+    method="post"
+    class="flex flex-col gap-6 px-4 py-6 pb-6 font-roboto"
+>
+    {% if error %}
+    <div
+        class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-red-600 p-4 text-center text-base font-bold text-white"
+    >
+        {{ error }}
+    </div>
+    {% endif %}
+
+    {% csrf_token %}
+
+    {% if is_edit %}
+        <input type="hidden" name="id" value="{{ definition.id }}">
+    {% endif %}
+
+    <div class="flex flex-col gap-4">
+
+        <!-- NOMBRE -->
+        <div class="flex flex-col rounded-[8px] bg-white px-4">
+            <input
+                type="text"
+                name="name"
+                value="{{ definition.name }}"
+                placeholder="Nombre de la medida"
+                class="w-full capitalize py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+            />
+        </div>
+
+        <!-- UNIDAD -->
+        <div class="flex flex-col rounded-[8px] bg-white px-4">
+            <select
+                name="unit"
+                style="
+                    padding-top: 12px;
+                    padding-bottom: 12px;
+                    height: 48px;
+                    min-height: 48px;
+                    line-height: 24px;
+                "
+                class="w-full py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+            >
+                <option value="">Unidad</option>
+                {% for val,label in units %}
+                <option value="{{ val }}"
+                    {% if definition.unit_type == val %}selected{% endif %}
+                >
+                    {{ label }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- REQUIRED -->
+        <div class="flex items-center gap-3 rounded-[8px] bg-white px-4 py-3">
+            <input
+                type="checkbox"
+                name="required"
+                id="required"
+                {% if definition.is_required %}checked{% endif %}
+                class="h-4 w-4"
+            />
+            <label for="required" class="text-sm font-normal">
+                Medida obligatoria
+            </label>
+        </div>
+
+    </div>
+</form>
+
+{% if is_edit %}
+<form
+    method="post"
+    class="flex flex-col items-center rounded-[8px] bg-white mx-4 px-4 py-2 my-4"
+    onsubmit="return confirm('¿Seguro que quieres borrar esta medida? Esta acción no se puede deshacer.');"
+>
+    {% csrf_token %}
+    <input type="hidden" name="id" value="{{ definition.id }}">
+    <input type="hidden" name="action" value="delete">
+
+    <button
+        type="submit"
+        class="cursor-pointer capitalize font-normal text-red-500 text-left"
+    >
+        Borrar medida
+    </button>
+</form>
+{% endif %}
+
+{% endblock %}

@@ -26,7 +26,7 @@ from django.views.decorators.http import require_http_methods
 # Local
 from app.services import GymService
 from .helpers import format_es_date, gym_required, role_required, signed_at_parts, slot_start_dt
-from .models import BaseTimeslot, DailyTimeslot, Gym, GymUser, Payment, TimeslotSignup, ActivityLog
+from .models import BaseTimeslot, DailyTimeslot, Gym, GymUser, Payment, TimeslotSignup, ActivityLog, MeasurementDefinition
 from .activity.helpers import log_activity
 from .activity.event_types import ActivityEventType
 
@@ -614,23 +614,13 @@ def profile(request):
         return HttpResponseBadRequest("userid inválido")
 
     user = get_object_or_404(
-        GymUser.objects.filter(gym=request.gym).prefetch_related(
-            "weights",
-        ).only(
+        GymUser.objects.filter(gym=request.gym).only(
             "id", "full_name", "role", "join_date", "birth_date", "phone",
             "is_active", "created_at", "updated_at",
         ),
         pk=user_id,
     )
 
-    last_weight = user.weights.order_by("-recorded_at").first()
-    weight = None
-    if last_weight:
-        weight = {
-            "id": last_weight.id,
-            "weight_kg": float(last_weight.weight_kg),
-            "recorded_at": timezone.localtime(last_weight.recorded_at) if last_weight.recorded_at else None,
-        }
 
 
     ps, pe = _current_period_for(user)
@@ -678,7 +668,6 @@ def profile(request):
             "birth_date": format_es_date(user.birth_date, include_year=True),
             "is_active": user.is_active,
             "height_cm": user.height_cm,
-            "weight": weight,
             "last_payment": last_payment_info,
         }
     }
@@ -1346,4 +1335,85 @@ def activity(request):
         {"activities": activities,
         "gym_name": request.gym.name,
         }
+    )
+
+@login_required
+@role_required(["admin"])
+def measurements(request):
+    definitions = (
+        MeasurementDefinition.objects
+        .filter(is_active=True)
+        .order_by("name")
+    )
+
+    context = {
+        "definitions": definitions,
+    }
+
+    return render(
+        request,
+        "app/measurements.html",
+        context
+    )
+
+@login_required
+@role_required(["admin"])
+def measurement_form(request):
+    definition_id = request.GET.get("measurementId") or request.POST.get("measurementId")
+    is_edit = bool(definition_id)
+
+    definition = None
+    if is_edit:
+        definition = get_object_or_404(MeasurementDefinition, id=definition_id)
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+
+        # ---- DELETE ----
+        if action == "delete" and definition:
+            definition.is_active = False
+            definition.save()
+            return redirect("app.measurements")
+
+        # ---- CREATE / UPDATE ----
+        name = request.POST.get("name", "").strip()
+        unit = request.POST.get("unit")
+        required = bool(request.POST.get("required"))
+
+        if not name or not unit:
+            return render(
+                request,
+                "app/measurement.html",
+                {
+                    "error": "Nombre y unidad son obligatorios",
+                    "is_edit": is_edit,
+                    "definition": definition,
+                    "units": MeasurementDefinition.UnitType.choices,
+                },
+            )
+
+        if is_edit:
+            definition.name = name
+            definition.unit_type = unit
+            definition.is_required = required
+            definition.save()
+        else:
+            MeasurementDefinition.objects.create(
+                name=name,
+                unit_type=unit,
+                is_required=required,
+            )
+
+        return redirect("app.measurements")
+
+    context = {
+        "is_edit": is_edit,
+        "definition": definition,
+        "units": MeasurementDefinition.UnitType.choices,
+    }
+
+    return render(
+        request,
+        "app/measurement.html",
+        context
     )
