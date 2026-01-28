@@ -621,6 +621,9 @@ def profile(request):
         pk=user_id,
     )
 
+    has_measurements = MeasurementRecord.objects.filter(
+        user_id=user_id
+    ).exists()
 
 
     ps, pe = _current_period_for(user)
@@ -669,6 +672,7 @@ def profile(request):
             "is_active": user.is_active,
             "height_cm": user.height_cm,
             "last_payment": last_payment_info,
+            "has_measurements": has_measurements,
         }
     }
     return render(request, "app/profile.html", ctx)
@@ -1426,7 +1430,7 @@ def measurement_form(request):
 
 
 @login_required
-@role_required(["admin"])
+@role_required(["admin", "member"])
 def user_measurements(request):
     raw = request.GET.get("userid")
     if not raw:
@@ -1454,6 +1458,7 @@ def user_measurements(request):
     context = {
         "user": user,
         "records": records,
+
     }
 
     return render(request, "app/user_measurements.html", context)
@@ -1461,7 +1466,7 @@ def user_measurements(request):
 
 
 @login_required
-@role_required(["admin"])
+@role_required(["admin", "member"])
 @gym_required
 def user_measurement(request):
     record_id = request.GET.get("recordid") or request.POST.get("recordid")

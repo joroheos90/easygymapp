@@ -18,14 +18,12 @@
     </svg>
 </a>
 
-{% if request.is_admin %}
 <a
     href="{% url 'app.measurement' %}"
     class="cursor-pointer text-lg font-bold text-blue-500"
 >
     Agregar
 </a>
-{% endif %}
 {% endblock %}
 
 {% block content %}

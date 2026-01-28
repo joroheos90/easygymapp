@@ -20,12 +20,14 @@
         />
     </svg>
 </a>
+{% if request.is_admin %}
 <a
     href="{% url 'app.user_measurement' %}?userid={{user.id}}"
     class="cursor-pointer text-lg font-bold text-blue-500"
 >
     Agregar
 </a>
+{% endif %}
 {% endblock %} {% block content %}
 <div class="min-h-screen p-4 py-6 font-roboto">
     <h1 class="mb-4 text-xl font-semibold text-gray-900">

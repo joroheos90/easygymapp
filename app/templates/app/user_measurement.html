@@ -15,7 +15,9 @@
               d="M15.75 19.5 8.25 12l7.5-7.5"/>
     </svg>
 </a>
+{% if request.is_admin %}
 <button form="measurement-form" class="text-blue-500 font-bold">Guardar</button>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -26,7 +28,7 @@
 >
     {% csrf_token %}
 
-    {% if is_edit %}
+    {% if is_edit and request.is_admin %}
         <input type="hidden" name="recordid" value="{{ record.id }}">
     {% endif %}
     <input type="hidden" name="userid" value="{{ user_id }}">
@@ -42,6 +44,7 @@
         <input
             type="date"
             name="record_date"
+            {% if not request.is_admin %}disabled{% endif %}
             value="{{ record.record_date|date:'Y-m-d' }}"
             class="w-full py-3 text-base ring-0 focus:ring-0 focus:outline-none"
         />
@@ -61,6 +64,7 @@
                     type="text"
                     name="def_{{ d.id }}"
                     value="{{ initial|get_item:d.name }}"
+                    {% if not request.is_admin %}disabled{% endif %}
                     data-unit-type="{{ d.unit_type }}"
                     inputmode="{% if d.unit_type != 'text' %}decimal{% endif %}"
                     class="measurement-input w-24 text-right text-base ring-0 focus:ring-0 focus:outline-none"
@@ -83,6 +87,7 @@
                     type="text"
                     name="def_{{ d.id }}"
                     value="{{ initial|get_item:d.name }}"
+                    {% if not request.is_admin %}disabled{% endif %}
                     data-unit-type="{{ d.unit_type }}"
                     inputmode="{% if d.unit_type != 'text' %}decimal{% endif %}"
                     class="measurement-input w-24 text-right text-base ring-0 focus:ring-0 focus:outline-none"
@@ -93,7 +98,7 @@
         {% endfor %}
     </div>
 
-    {% if is_edit %}
+    {% if is_edit and request.is_admin %}
     <div class="rounded-[12px] bg-white px-4 py-3 text-center">
         <button
             type="submit"
@@ -107,6 +112,7 @@
     </div>
     {% endif %}
 </form>
+{% if request.is_admin %}
 <script>
     document.addEventListener("DOMContentLoaded", () => {
     
@@ -174,5 +180,5 @@
         });
     });
     </script>
-    
+{% endif %}
 {% endblock %}

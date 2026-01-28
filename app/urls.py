@@ -15,7 +15,6 @@ urlpatterns = [
     path("activity", views.activity, name="app.activity"),
     path("measurements", views.measurements, name="app.measurements"),
     path("measurement", views.measurement_form, name="app.measurement"),
-    path("user-measurements", views.user_measurements, name="app.user_measurements"),
     path("user-measurement", views.user_measurement, name="app.user_measurement"),
 
 
@@ -27,6 +26,7 @@ urlpatterns = [
     path("profile", views.profile, name="app.profile"),
     path("user", views.user, name="app.edit"),
     path("payments", views.payments, name="app.payments"),
+    path("user-measurements", views.user_measurements, name="app.user_measurements"),
     
     #auth
     path("login/", views.AppLoginView.as_view(), name="app.login"),
