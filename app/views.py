@@ -14,7 +14,7 @@ from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
 from django.contrib.auth.views import LoginView, PasswordChangeView
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import Count, Max, Sum
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
@@ -26,7 +26,7 @@ from django.views.decorators.http import require_http_methods
 # Local
 from app.services import GymService
 from .helpers import format_es_date, gym_required, role_required, signed_at_parts, slot_start_dt
-from .models import BaseTimeslot, DailyTimeslot, Gym, GymUser, Payment, TimeslotSignup, ActivityLog, MeasurementDefinition
+from .models import BaseTimeslot, DailyTimeslot, Gym, GymUser, Payment, TimeslotSignup, ActivityLog, MeasurementDefinition, MeasurementRecord, MeasurementValue
 from .activity.helpers import log_activity
 from .activity.event_types import ActivityEventType
 
@@ -1343,7 +1343,7 @@ def measurements(request):
     definitions = (
         MeasurementDefinition.objects
         .filter(is_active=True)
-        .order_by("name")
+        .order_by("priority", "name")
     )
 
     context = {
@@ -1378,6 +1378,7 @@ def measurement_form(request):
         # ---- CREATE / UPDATE ----
         name = request.POST.get("name", "").strip()
         unit = request.POST.get("unit")
+        priority = request.POST.get("priority", "").strip()
         required = bool(request.POST.get("required"))
 
         if not name or not unit:
@@ -1391,16 +1392,21 @@ def measurement_form(request):
                     "units": MeasurementDefinition.UnitType.choices,
                 },
             )
+        
+        if not priority:
+            priority = 100
 
         if is_edit:
             definition.name = name
             definition.unit_type = unit
+            definition.priority = priority
             definition.is_required = required
             definition.save()
         else:
             MeasurementDefinition.objects.create(
                 name=name,
                 unit_type=unit,
+                priority=priority,
                 is_required=required,
             )
 
@@ -1416,4 +1422,204 @@ def measurement_form(request):
         request,
         "app/measurement.html",
         context
+    )
+
+
+@login_required
+@role_required(["admin"])
+def user_measurements(request):
+    raw = request.GET.get("userid")
+    if not raw:
+        return HttpResponseBadRequest("Falta el parámetro ?userid")
+
+    try:
+        user_id = int(raw)
+    except (TypeError, ValueError):
+        return HttpResponseBadRequest("userid inválido")
+
+    user = get_object_or_404(GymUser, id=user_id)
+
+    records = (
+        MeasurementRecord.objects
+        .filter(user=user)
+        .order_by("-record_date")
+        .prefetch_related("values")
+    )
+
+    for r in records:
+        values = list(r.values.all())
+        values.sort(key=lambda v: v.priority if v.priority is not None else 999)
+        r.top_values = values[:4]
+
+    context = {
+        "user": user,
+        "records": records,
+    }
+
+    return render(request, "app/user_measurements.html", context)
+
+
+
+@login_required
+@role_required(["admin"])
+@gym_required
+def user_measurement(request):
+    record_id = request.GET.get("recordid") or request.POST.get("recordid")
+    user_id   = request.GET.get("userid")   or request.POST.get("userid")
+
+    if not user_id:
+        return HttpResponseBadRequest("userid requerido")
+
+    user = get_object_or_404(GymUser, pk=user_id, gym=request.gym)
+
+    is_edit = bool(record_id)
+
+    record = None
+    if is_edit:
+        record = get_object_or_404(
+            MeasurementRecord,
+            pk=record_id,
+            gym=request.gym,
+            user=user,
+        )
+
+    # ------------------------------------------------------------------
+    # DEFINITIONS (fuente única de verdad)
+    # ------------------------------------------------------------------
+    definitions = (
+        MeasurementDefinition.objects
+        .filter(is_active=True)
+        .order_by("priority", "id")
+    )
+
+    primary_definitions   = list(definitions[:5])
+    secondary_definitions = list(definitions[5:])
+
+    # ------------------------------------------------------------------
+    # VALORES EXISTENTES (solo edit)
+    # ------------------------------------------------------------------
+    existing_values = {}
+    if record:
+        for v in record.values.all():
+            existing_values[v.definition_name] = v.value
+
+    # ------------------------------------------------------------------
+    # POST
+    # ------------------------------------------------------------------
+    if request.method == "POST":
+
+        # ---------------- DELETE ----------------
+        if request.POST.get("action") == "delete":
+            if not record:
+                return HttpResponseBadRequest("No puedes borrar: medición no encontrada")
+
+            record.delete()
+            return redirect(
+                f"{reverse('app.user_measurements')}?userid={user.id}"
+            )
+
+        # ---------------- READ FORM ----------------
+        date_s = request.POST.get("record_date")
+        notes  = request.POST.get("notes") or ""
+
+        try:
+            y, m, d = map(int, date_s.split("-"))
+            record_date = date(y, m, d)
+        except Exception:
+            return render(
+                request,
+                "app/user_measurement.html",
+                {
+                    "error": "Fecha inválida",
+                    "primary_definitions": primary_definitions,
+                    "secondary_definitions": secondary_definitions,
+                    "initial": existing_values,
+                    "record": record or {"record_date": timezone.localdate()},
+                    "is_edit": is_edit,
+                    "user": user,
+                    "user_id": user.id,
+                }
+            )
+
+        # ---------------- SAVE RECORD ----------------
+        try:
+            with transaction.atomic():
+                if is_edit:
+                    r = record
+                    r.record_date = record_date
+                    r.notes = notes
+                    r.save()
+
+                    r.values.all().delete()
+                else:
+                    r = MeasurementRecord.objects.create(
+                        gym=request.gym,
+                        user=user,
+                        record_date=record_date,
+                        notes=notes,
+                    )
+        except IntegrityError:
+            return render(
+                request,
+                "app/user_measurement.html",
+                {
+                    "error": "Ya existe una medición para esta fecha",
+                    "primary_definitions": primary_definitions,
+                    "secondary_definitions": secondary_definitions,
+                    "initial": existing_values,
+                    "record": record or {"record_date": record_date},
+                    "is_edit": is_edit,
+                    "user": user,
+                    "user_id": user.id,
+                }
+            )
+
+        # ---------------- SAVE VALUES (SNAPSHOT) ----------------
+        for d in definitions:
+            raw_value = (request.POST.get(f"def_{d.id}") or "").strip()
+
+            if d.is_required and not raw_value:
+                r.delete()
+                return render(
+                    request,
+                    "app/user_measurement.html",
+                    {
+                        "error": "Completa todas las mediciones obligatorias",
+                        "primary_definitions": primary_definitions,
+                        "secondary_definitions": secondary_definitions,
+                        "initial": existing_values,
+                        "record": record or {"record_date": record_date},
+                        "is_edit": is_edit,
+                        "user": user,
+                        "user_id": user.id,
+                    }
+                )
+
+            if raw_value:
+                MeasurementValue.objects.create(
+                    record=r,
+                    definition_name=d.name,     # snapshot
+                    unit_type=d.unit_type,      # snapshot
+                    value=raw_value,
+                )
+
+        return redirect(
+            f"{reverse('app.user_measurements')}?userid={user.id}"
+        )
+
+    # ------------------------------------------------------------------
+    # GET
+    # ------------------------------------------------------------------
+    return render(
+        request,
+        "app/user_measurement.html",
+        {
+            "primary_definitions": primary_definitions,
+            "secondary_definitions": secondary_definitions,
+            "initial": existing_values,
+            "record": record or {"record_date": timezone.localdate()},
+            "is_edit": is_edit,
+            "user": user,
+            "user_id": user.id,
+        }
     )

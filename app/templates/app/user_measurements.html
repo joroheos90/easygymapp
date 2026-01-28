@@ -1,0 +1,68 @@
+{% extends "app/base.html" %}
+{% block title %}Mediciones{% endblock %} {% block headerTitle %}Mediciones{% endblock %} 
+{% block headerButtons %}
+<a
+    href="{% url 'app.profile' %}?userid={{ user.id }}"
+    class="cursor-pointer text-lg font-normal"
+>
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="size-6"
+    >
+        <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M15.75 19.5 8.25 12l7.5-7.5"
+        />
+    </svg>
+</a>
+<a
+    href="{% url 'app.user_measurement' %}?userid={{user.id}}"
+    class="cursor-pointer text-lg font-bold text-blue-500"
+>
+    Agregar
+</a>
+{% endblock %} {% block content %}
+<div class="min-h-screen p-4 py-6 font-roboto">
+    <h1 class="mb-4 text-xl font-semibold text-gray-900">
+        Historial de mediciones
+    </h1>
+
+    {% for record in records %}
+    <a href="{% url 'app.user_measurement' %}?userid={{user.id}}&recordid={{record.id}}" class="mb-5 flex flex-col gap-4 rounded-[24px] bg-white p-4">
+        <div class="flex items-center justify-between border-b border-gray-300">
+            <span class="text-base font-bold uppercase">
+                {{ record.record_date|date:"d M Y" }}
+            </span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            {% for item in record.top_values %}
+            <div
+                class="flex flex-col gap-1 rounded-[12px] border border-gray-300 bg-gray-50 px-4 py-3"
+            >
+                <span class="text-xs text-gray-500 uppercase">
+                    {{ item.definition_name }}
+                </span>
+                <span class="text-lg font-semibold">
+                    {{ item.value }} {% if item.unit_type %}
+                    <span class="text-sm font-normal text-gray-600">
+                        {{ item.unit_type }}
+                    </span>
+                    {% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+    </a>
+    {% empty%}
+    <div class="text-sm text-gray-500 py-4 text-center">
+        No hay mediciones registradas para <span class="capitalize">{{user.full_name}}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

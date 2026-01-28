@@ -39,12 +39,21 @@
             href="{% url 'app.measurement' %}?measurementId={{definition.id}}"
             class="flex w-full cursor-pointer flex-row items-center justify-between border-b border-gray-400 py-2"
         >
-            <div class="flex w-2/4 flex-col">
+            <div class="flex w-1/4 flex-col">
                 <span class="text-base capitalize font-medium">
                     {{ definition.name }}
                 </span>
                 <span class="text-xs capitalize text-gray-500">
                     medida
+                </span>
+            </div>
+
+            <div class="flex w-1/4 flex-col items-center">
+                <span class="text-base font-medium">
+                    {{ definition.priority }}
+                </span>
+                <span class="text-xs text-gray-500">
+                    Orden
                 </span>
             </div>
 

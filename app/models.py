@@ -204,9 +204,9 @@ class MeasurementDefinition(models.Model):
     class UnitType(models.TextChoices):
         CM = "cm", "Centímetros"
         KG = "kg", "Kilogramos"
-        PERCENT = "percent", "Porcentaje"
+        PERCENT = "%", "Porcentaje"
         TEXT = "text", "Texto"
-        NUMBER = "number", "Número"
+        NUMBER = "#", "Número"
 
     id = models.BigAutoField(primary_key=True)
 
@@ -215,6 +215,10 @@ class MeasurementDefinition(models.Model):
     unit_type = models.CharField(
         max_length=20,
         choices=UnitType.choices
+    )
+
+    priority = models.PositiveSmallIntegerField(
+        default=100,
     )
 
     is_required = models.BooleanField(default=False)
@@ -279,6 +283,10 @@ class MeasurementValue(models.Model):
     # Snapshot inmutable
     definition_name = models.CharField(max_length=80)
     unit_type = models.CharField(max_length=20)
+    priority = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True
+    )
 
     value = models.CharField(max_length=64)
     created_at = models.DateTimeField(default=timezone.now)
