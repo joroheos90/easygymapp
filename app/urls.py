@@ -27,6 +27,7 @@ urlpatterns = [
     path("user", views.user, name="app.edit"),
     path("payments", views.payments, name="app.payments"),
     path("user-measurements", views.user_measurements, name="app.user_measurements"),
+    path("user-nutrition", views.nutrition_dashboard, name="app.nutrition_dashboard"),
     
     #auth
     path("login/", views.AppLoginView.as_view(), name="app.login"),

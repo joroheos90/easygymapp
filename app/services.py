@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Iterable, Optional, Tuple
 from dateutil.relativedelta import relativedelta
+from calendar import monthrange
 from django.contrib.auth import get_user_model
 from uuid import uuid4
 
@@ -17,6 +18,8 @@ from .models import (
     BaseTimeslot,
     DailyTimeslot,
     TimeslotSignup,
+    MeasurementValue,
+    MeasurementDefinition,
 )
 
 
@@ -387,3 +390,291 @@ class GymService:
                 enrolled=d["enrolled"],
                 available=d["capacity"] - d["enrolled"],
             )
+
+
+from datetime import date
+
+class BodyMetricsService:
+
+    @staticmethod
+    def get_metrics(user_id: int, month: int, year: int) -> dict:
+        user = GymUser.objects.only(
+            "id", "birth_date", "sex", "height_cm"
+        ).get(id=user_id)
+
+        if not user.birth_date or not user.height_cm:
+            return {}
+        
+        age = BodyMetricsService._calculate_age(user.birth_date)
+
+        return {
+            "weight": BodyMetricsService._weight_metric(user, age, month, year),
+            "waist": BodyMetricsService._waist_metric(user, month, year),
+            "muscle": BodyMetricsService._muscle_metric(user, month, year),
+            "body_fat": BodyMetricsService._body_fat_metric(user, age, month, year),
+            "bmi": BodyMetricsService._bmi_metric(user, month, year),
+        }
+
+
+    # -------------------------
+    # Helpers
+    # -------------------------
+
+    @staticmethod
+    def _calculate_age(birth_date):
+        today = date.today()
+        return today.year - birth_date.year - (
+            (today.month, today.day) < (birth_date.month, birth_date.day)
+        )
+
+    @staticmethod
+    def _get_trend_values(user_id, code, month, year):
+        last_day = monthrange(year, month)[1]
+        end_of_base_month = date(
+            year,
+            month,
+            last_day
+        )
+        qs = (
+                MeasurementValue.objects
+                .filter(
+                    record__user_id=user_id,
+                    definition_code=code,
+                    record__record_date__lte=end_of_base_month,
+                )
+                .select_related("record")
+                .order_by("-record__record_date")[:12]
+            )
+
+        values = [
+            {
+                "value": float(v.value),
+                "date": v.record.record_date,
+                "label": v.record.record_date.strftime("%b"),
+                "definition_name": v.definition_name if v.definition_name else v.definition_code,
+            }
+            for v in reversed(qs)
+        ]
+
+        def _normalize(values, min_height=10, max_height=100):
+            if not values:
+                return values
+
+            nums = [v["value"] for v in values]
+            vmin, vmax = min(nums), max(nums)
+
+            for v in values:
+                if vmax == vmin:
+                    v["height"] = 60  # plano si no hay variación
+                else:
+                    v["height"] = round(
+                        min_height + (v["value"] - vmin) * (max_height - min_height) / (vmax - vmin)
+                    )
+
+            return values
+
+
+        return _normalize(values)
+
+
+    @staticmethod
+    def _build_trend(values):
+        if len(values) < 2:
+            return {"delta": None, "direction": None, "values": values}
+
+        delta = round(values[-1]["value"] - values[0]["value"], 1)
+
+        return {
+            "delta": delta,
+            "direction": "up" if delta > 0 else "down" if delta < 0 else "flat",
+            "values": values,
+        }
+
+    # -------------------------
+    # Peso
+    # -------------------------
+
+    @staticmethod
+    def _weight_metric(user, age, month, year):
+        values = BodyMetricsService._get_trend_values(
+            user.id, MeasurementDefinition.MeasurementCode.WEIGHT, month, year
+        )
+
+        current = values[-1] if values else {}
+        current_value = current["value"]
+
+        min_w, max_w, ideal = BodyMetricsService._weight_range(user)
+
+        status = BodyMetricsService._status(current_value, min_w, max_w)
+
+        return {
+            "name": current["definition_name"],
+            "unit": "kg",
+            "current": current_value,
+            "range": {"min": min_w, "max": max_w, "ideal": ideal},
+            "status": status,
+            "trend": BodyMetricsService._build_trend(values),
+        }
+
+    @staticmethod
+    def _weight_range(user):
+        if not user.height_cm:
+            return None, None, None
+
+        bmi_min, bmi_max = 18.5, 24.9
+        h = user.height_cm / 100
+
+        weight_min = round(bmi_min * h * h, 1)
+        weight_max = round(bmi_max * h * h, 1)
+        weight_ideal = round((weight_min + weight_max) / 2, 1)
+
+        return weight_min, weight_max, weight_ideal
+
+
+    # -------------------------
+    # Cintura
+    # -------------------------
+
+    @staticmethod
+    def _waist_metric(user, month, year):
+        values = BodyMetricsService._get_trend_values(
+            user.id, MeasurementDefinition.MeasurementCode.WAIST, month, year
+        )
+
+        current = values[-1] if values else {}
+        current_value = current["value"]
+
+        min_w, max_w = BodyMetricsService._waist_range(user.sex)
+
+        status = BodyMetricsService._status(current_value, min_w, max_w)
+
+        return {
+            "name": current["definition_name"],
+            "unit": "cm",
+            "current": current_value,
+            "range": {"min": min_w, "max": max_w},
+            "status": status,
+            "trend": BodyMetricsService._build_trend(values),
+        }
+
+    @staticmethod
+    def _waist_range(sex):
+        if sex == "male":
+            return 70, 94
+        return 60, 80 
+    
+    @staticmethod
+    def _muscle_metric(user, month, year):
+        values = BodyMetricsService._get_trend_values(
+            user.id, MeasurementDefinition.MeasurementCode.MUSCLE_MASS, month, year
+        )
+
+        current = values[-1] if values else {}
+        current_value = current["value"]
+        min_v, max_v = BodyMetricsService._muscle_range(user.sex)
+
+        return {
+            "name": current["definition_name"],
+            "unit": "%",
+            "current": current_value,
+            "range": {"min": min_v, "max": max_v},
+            "status": BodyMetricsService._status(current_value, min_v, max_v),
+            "trend": BodyMetricsService._build_trend(values),
+        }
+
+    @staticmethod
+    def _muscle_range(sex):
+        if sex == "male":
+            return 33, 39
+        return 24, 30
+    
+
+    @staticmethod
+    def _body_fat_metric(user, age, month, year):
+        values = BodyMetricsService._get_trend_values(
+            user.id, MeasurementDefinition.MeasurementCode.BODY_FAT_PERCENT, month, year
+        )
+
+        current = values[-1] if values else {}
+        current_value = current["value"]
+        min_v, max_v = BodyMetricsService._body_fat_range(user.sex, age)
+
+        return {
+            "name": current["definition_name"],
+            "unit": "%",
+            "current": current_value,
+            "range": {"min": min_v, "max": max_v},
+            "status": BodyMetricsService._status(current_value, min_v, max_v),
+            "trend": BodyMetricsService._build_trend(values),
+        }
+
+
+    @staticmethod
+    def _body_fat_range(sex, age):
+        if sex == "male":
+            if age < 40:
+                return 8, 19
+            if age < 60:
+                return 11, 22
+            return 13, 25
+
+        # female
+        if age < 40:
+            return 21, 32
+        if age < 60:
+            return 23, 35
+        return 24, 36
+
+    @staticmethod
+    def _bmi_metric(user, month, year):
+        # usamos el último peso del mes
+        values = BodyMetricsService._get_trend_values(
+            user.id, MeasurementDefinition.MeasurementCode.WEIGHT, month, year
+        )
+
+        if not values or not user.height_cm:
+            return {
+                "name": "bmi",
+                "unit": "kg/m2",
+                "current": None,
+                "range": {"min": 18.5, "max": 24.9},
+                "status": None,
+                "trend": None,
+            }
+
+        h = user.height_cm / 100
+        bmi_values = []
+
+        for v in values:
+            bmi = round(v["value"] / (h * h), 1)
+            bmi_values.append({
+                "date": v["date"],
+                "value": bmi,
+            })
+
+        current = bmi_values[-1]["value"]
+        min_v, max_v = 18.5, 24.9
+
+        return {
+            "name": "bmi",
+            "unit": "kg/m2",
+            "current": current,
+            "range": {"min": min_v, "max": max_v},
+            "status": BodyMetricsService._status(current, min_v, max_v),
+            "trend": BodyMetricsService._build_trend(bmi_values),
+        }
+
+
+    # -------------------------
+    # Status común
+    # -------------------------
+
+    @staticmethod
+    def _status(value, min_v, max_v):
+        if value is None or min_v is None:
+            return None
+        if value < min_v:
+            return "low"
+        if max_v and value > max_v:
+            return "high"
+        return "ok"

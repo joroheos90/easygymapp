@@ -37,7 +37,7 @@
                 type="text"
                 name="last_name"
                 value="{{ last_name }}"
-                class="w-full px-1 py-3 text-base font-normal capitalize ring-0 focus:ring-0 focus:outline-none"
+                class="w-full px-1 border-b border-gray-300 py-3 text-base font-normal capitalize ring-0 focus:ring-0 focus:outline-none"
                 placeholder="Apellidos"
                 autocomplete="off"
             />
@@ -109,12 +109,33 @@
             <input
                 type="number"
                 step="1"
-                min="0"
+                min="100"
+                max="250"
                 name="height_cm"
                 value="{{ height_cm }}"
                 class="w-full appearance-none border-b border-gray-300 px-1 py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
                 placeholder="Estatura en centímetros (opcional)"
             />
+            <select
+                name="sex"
+                style="
+                    padding-top: 12px;
+                    padding-bottom: 12px;
+                    height: 48px;
+                    min-height: 48px;
+                    line-height: 24px;
+                "
+                class="w-full py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+            >
+                <option value="">Sexo</option>
+                <option value="M" {% if sex == "M" %}selected{% endif %}>
+                    Masculino
+                </option>
+                <option value="F" {% if sex == "F" %}selected{% endif %}>
+                    Femenino
+                </option>
+            </select>
+
         </div>
     </div>
 </form>

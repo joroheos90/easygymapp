@@ -30,3 +30,17 @@ def get_item(d, key):
     if not d:
         return ""
     return d.get(key, "")
+
+
+@register.filter
+def percent_of(value, max_value):
+    """
+    Calcula el porcentaje relativo de 'value' dentro del rango 40 - max_value
+    """
+    try:
+        min_base = 40  # tu mínimo de la escala
+        percent = ((float(value) - min_base) / (float(max_value) - min_base)) * 100
+        return f"{percent:.2f}"  # siempre con 2 decimales
+    except (ValueError, ZeroDivisionError):
+        return "0"
+

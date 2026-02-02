@@ -24,7 +24,7 @@ from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods
 
 # Local
-from app.services import GymService
+from app.services import GymService, BodyMetricsService
 from .helpers import format_es_date, gym_required, role_required, signed_at_parts, slot_start_dt
 from .models import BaseTimeslot, DailyTimeslot, Gym, GymUser, Payment, TimeslotSignup, ActivityLog, MeasurementDefinition, MeasurementRecord, MeasurementValue
 from .activity.helpers import log_activity
@@ -616,7 +616,7 @@ def profile(request):
     user = get_object_or_404(
         GymUser.objects.filter(gym=request.gym).only(
             "id", "full_name", "role", "join_date", "birth_date", "phone",
-            "is_active", "created_at", "updated_at",
+            "is_active", "created_at", "sex", "updated_at",
         ),
         pk=user_id,
     )
@@ -671,6 +671,7 @@ def profile(request):
             "birth_date": format_es_date(user.birth_date, include_year=True),
             "is_active": user.is_active,
             "height_cm": user.height_cm,
+            "sex": user.get_sex_display(),
             "last_payment": last_payment_info,
             "has_measurements": has_measurements,
         }
@@ -825,6 +826,7 @@ def user(request):
 
         phone      = (request.POST.get("phone") or "").strip() or None
         birth_date = parse_date(request.POST.get("birth_date") or "")
+        sex = request.POST.get("sex")
         join_date  = parse_date(request.POST.get("join_date") or "") or timezone.localdate()
         height_cm  = request.POST.get("height_cm") or None
         is_active  = True  # si agregas toggle en UI, léelo aquí
@@ -836,8 +838,9 @@ def user(request):
             member.phone = phone
             member.birth_date = birth_date
             member.join_date = join_date
-            member.height_cm = height_cm
-            member.save(update_fields=["phone", "birth_date", "join_date", "height_cm", "updated_at", "gym_id"])
+            member.height_cm = int(height_cm)
+            member.sex = sex
+            member.save(update_fields=["phone", "birth_date", "join_date", "height_cm", "sex", "updated_at", "gym_id"])
             log_activity(
                 gym=request.gym,
                 actor=request.user,
@@ -853,8 +856,9 @@ def user(request):
             member.birth_date = birth_date
             member.join_date  = join_date
             member.height_cm  = height_cm
+            member.sex = sex
             member.is_active  = is_active
-            member.save(update_fields=["full_name", "phone", "birth_date", "join_date", "height_cm", "is_active", "updated_at"])
+            member.save(update_fields=["full_name", "phone", "birth_date", "join_date", "height_cm", "sex", "is_active", "updated_at"])
             log_activity(
                 gym=request.gym,
                 actor=request.user,
@@ -896,6 +900,7 @@ def user(request):
         "birth_date": member.birth_date.isoformat() if (member and member.birth_date) else "",
         "join_date": member.join_date.isoformat() if (member and member.join_date) else timezone.localdate().isoformat(),
         "height_cm": member.height_cm if member else None,
+        "sex": member.sex if member else None,
     }
     return render(request, "app/editprofile.html", ctx)
 
@@ -1606,6 +1611,8 @@ def user_measurement(request):
                     definition_name=d.name,     # snapshot
                     unit_type=d.unit_type,      # snapshot
                     value=raw_value,
+                    priority=d.priority,
+                    definition_code=d.code,
                 )
 
         return redirect(
@@ -1627,4 +1634,52 @@ def user_measurement(request):
             "user": user,
             "user_id": user.id,
         }
+    )
+
+
+
+@login_required
+@gym_required
+def nutrition_dashboard(request):
+    user_id = request.GET.get("userid")
+    today = date.today()
+
+    year = request.GET.get("year")
+    month = request.GET.get("month")
+
+    try:
+        year = int(year) if year else today.year
+        month = int(month) if month else today.month
+    except ValueError:
+        return HttpResponseBadRequest("Invalid parameters")
+
+    if not 1 <= month <= 12:
+        return HttpResponseBadRequest("Invalid month")
+
+    user = get_object_or_404(
+        GymUser.objects.only(
+            "id", "full_name", "birth_date", "sex", "height_cm"
+        ),
+        id=user_id,
+        gym=request.gym,
+        is_active=True,
+    )
+
+    metrics = BodyMetricsService.get_metrics(
+        user_id=user.id,
+        month=month,
+        year=year,
+    )
+
+    context = {
+        "user": user,
+        "first_name": user.full_name.split()[0] if user.full_name else "",
+        "year": year,
+        "month": month,
+        "metrics": metrics,
+    }
+    return render(
+        request,
+        "app/nutrition_status.html",
+        context,
     )

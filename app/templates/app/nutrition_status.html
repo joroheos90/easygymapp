@@ -1,0 +1,236 @@
+{% extends "app/base.html" %}
+{% load customfilters %}
+{% block title %}Estado Nutricional{% endblock %}
+{% block headerTitle %}Estado Nutricional{% endblock %}
+
+{% block headerButtons %}
+<a href="{% url 'app.profile' %}?userid={{user.id}}" class="cursor-pointer text-lg font-normal">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none"
+         viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
+         class="size-6">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M15.75 19.5 8.25 12l7.5-7.5"/>
+    </svg>
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="font-roboto flex flex-col gap-6 px-4 py-6">
+
+    {% if metrics %}
+    <h1 class="text-xs font-semibold italic text-gray-800">
+        Hola {{ first_name }},
+        {% with w=metrics.weight %}
+            {% if w.status == "high" and w.trend.direction == "down" %}
+                excelente avance 💪 has bajado de peso y te estás acercando a tu peso más sano ({{ w.range.ideal }} kg).
+            {% elif w.status == "high" and w.trend.direction == "up" %}
+                ojo ⚠️ el peso está subiendo y ya se encuentra por encima del rango saludable, ajustemos el plan.
+            {% elif w.status == "low" and w.trend.direction == "up" %}
+                muy bien 🌱 estás ganando peso y acercándote al rango saludable.
+            {% elif w.status == "low" and w.trend.direction == "down" %}
+                atención ⚠️ el peso sigue bajando y se aleja del rango recomendado.
+            {% elif w.status == "ok" %}
+                excelente 👏 tu peso está dentro del rango saludable, sigamos consolidando el progreso.
+            {% else %}
+                sigamos monitoreando tu progreso.
+            {% endif %}
+        {% endwith %}
+    </h1>
+    
+      
+    <div class="flex flex-col items-center gap-1">
+        <span class="text-4xl font-bold text-black">
+            {% if metrics.weight.trend.delta %}
+                {{ metrics.weight.trend.delta }} kg
+            {% else %}
+                —
+            {% endif %}
+        </span>
+        <span class="text-sm text-gray-500">
+            {{ metrics.weight.current|default:"—" }} kg actuales
+        </span>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+        <div class="flex cursor-pointer flex-col gap-1 rounded-[8px] {% if metrics.muscle.status == 'ok' %} bg-green-100
+        {% elif metrics.muscle.status == 'high' or metrics.muscle.status == 'low'  %} bg-red-100
+        {% else %} bg-white {% endif %} px-4 py-3 text-base font-normal shadow-sm">
+            <span class="text-xs text-gray-500">Masa Muscular</span>
+            <span class="flex flex-row items-center gap-1 text-2xl font-bold"
+              >{{ metrics.muscle.current|default:"—" }} %
+              {% if metrics.muscle.trend.direction == 'down' %}
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" />
+              </svg>
+                
+              {% elif metrics.muscle.trend.direction == 'up' %}
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
+                </svg>
+                
+              {% else %}
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+              {% endif %}
+            </span>
+        </div>
+
+        <div class="flex cursor-pointer flex-col gap-1 rounded-[8px] {% if metrics.body_fat.status == 'ok' %} bg-green-100
+        {% elif metrics.body_fat.status == 'high' or metrics.body_fat.status == 'low'  %} bg-red-100
+        {% else %} bg-white {% endif %} px-4 py-3 text-base font-normal shadow-sm">
+            <span class="text-xs text-gray-500">Grasa Corporal</span>
+            <span class="flex flex-row items-center gap-1 text-2xl font-bold"
+              >{{ metrics.body_fat.current|default:"—" }} %
+              {% if metrics.body_fat.trend.direction == 'down' %}
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" />
+              </svg>
+                
+              {% elif metrics.body_fat.trend.direction == 'up' %}
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
+                </svg>
+                
+              {% else %}
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+              {% endif %}
+            </span>
+        </div>
+
+        <!-- Cintura -->
+        <div class="flex cursor-pointer flex-col gap-1 rounded-[8px] {% if metrics.waist.status == 'ok' %} bg-green-100
+        {% elif metrics.waist.status == 'high' or metrics.waist.status == 'low'  %} bg-red-100
+        {% else %} bg-white {% endif %} px-4 py-3 text-base font-normal shadow-sm">
+            <span class="text-xs text-gray-500">Cintura</span>
+            <span class="flex flex-row items-center gap-1 text-2xl font-bold"
+              >{{ metrics.waist.current|default:"—" }} cm
+              {% if metrics.waist.trend.direction == 'down' %}
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" />
+              </svg>
+                
+              {% elif metrics.waist.trend.direction == 'up' %}
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
+                </svg>
+                
+              {% else %}
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+              {% endif %}
+            </span>
+        </div>
+
+    </div>
+
+    {% if metrics.weight.trend.values|length > 1 %}
+    <!-- Progreso general (placeholder visual) -->
+    <div class="flex flex-col gap-2">
+        <span class="text-sm font-semibold text-gray-700">
+            Progreso general de peso
+        </span>
+        <div class="mx-auto w-full bg-white">
+            <div class="flex">
+              <!-- Columna Izquierda: Área de la Gráfica y Barras -->
+              <div class="relative flex h-40 flex-1 items-end justify-between gap-2 border-b border-l border-gray-200 pl-2">
+                <!-- Líneas de Rango (Rojo/Verde SIN TEXTO) -->
+                <!-- Línea Roja Superior (Sobrepeso) -->
+                <div class="absolute z-10 w-full border-t border-red-500" style="bottom: {{ metrics.weight.range.max|percent_of:100 }}%;"></div>
+                <!-- Línea Verde (Ideal) -->
+                <div class="absolute z-10 w-full border-t border-green-500" style="bottom: {{ metrics.weight.range.ideal|percent_of:100 }}%;"></div>
+                <!-- Línea Roja Inferior (Bajo Peso) -->
+                <div class="absolute z-10 w-full border-t border-red-500" style="bottom: {{ metrics.weight.range.min|percent_of:100 }}%;"></div>
+          
+                <!-- Líneas Horizontales de Cuadrícula Discretas (Detrás de todo) -->
+                <div class="absolute z-0 w-full border-t border-dashed border-gray-300" style="bottom: 19%;"></div>
+                <div class="absolute z-0 w-full border-t border-dashed border-gray-300" style="bottom: 35%;"></div>
+                <div class="absolute z-0 w-full border-t border-dashed border-gray-300" style="bottom: 50.5%;"></div>
+                <div class="absolute z-0 w-full border-t border-dashed border-gray-300" style="bottom: 66.67%;"></div>
+                <div class="absolute z-0 w-full border-t border-dashed border-gray-300" style="bottom: 81%;"></div>
+                <div class="absolute z-0 w-full border-t border-dashed border-gray-300" style="bottom: 100%;"></div>
+                
+
+          
+                <!-- Barras Azules (En frente de las líneas de rango) -->
+                {# Barras azules del peso #}
+                {% for point in metrics.weight.trend.values %}
+                    <div class="relative flex h-full flex-1 flex-col items-center justify-end">
+                    <div class="z-20 w-full max-w-[20px] rounded-t-lg bg-[#21afed]" style="height: {{ point.value|percent_of:100 }}%;"></div>
+                    <span class="absolute -bottom-6 text-[9px] font-semibold text-gray-500">{{ point.label }}</span>
+                    </div>
+                {% endfor %}
+               
+              </div>
+          
+              <!-- Columna Derecha: Etiquetas de Pesos (Eje Y) -->
+              <div class="flex h-40 w-16 flex-col justify-between pb-0.5 text-right">
+                <span class="text-[9px] text-gray-400">100 kg</span>
+                <span class="text-[9px] text-gray-400">90 kg</span>
+                <span class="text-[9px] text-gray-400">80 kg</span>
+                <span class="text-[9px] text-gray-400">70 kg</span>
+                <span class="text-[9px] text-gray-400">60 kg</span>
+                <span class="text-[9px] text-gray-400">50 kg</span>
+                <span class="text-[9px] text-gray-400">40 kg</span>
+              </div>
+            </div>
+        </div>
+                  
+    </div>
+    {% endif %}
+    <!-- Tabla de rangos -->
+    <div class="flex flex-col gap-2 pt-4">
+        <span class="text-sm font-semibold text-gray-700">
+            Detalle por rangos adecuados
+        </span>
+
+        <div class="rounded-xl border border-gray-200 overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-100 text-gray-600">
+                    <tr>
+                        <th class="px-3 py-2 text-left">Métrica</th>
+                        <th class="px-3 py-2 text-right">Valor</th>
+                        <th class="px-3 py-2 text-center">Rango</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    {% for m in metrics.values %}
+                    <tr class="border-t">
+                        <td class="px-3 py-2 capitalize">{{ m.name }}</td>
+                        <td class="px-3 py-2 text-right font-medium">
+                            {{ m.current|default:"—" }} {{ m.unit }}
+                        </td>
+                        <td class="px-3 py-2 text-center">
+                            <span class="px-2 py-0.5 rounded-full text-xs font-bold
+                                {% if m.status == 'ok' %} bg-green-200 text-green-800
+                                {% elif m.status == 'high' or m.status == 'low' %} bg-red-200 text-red-800
+                                {% else %} bg-gray-200 text-gray-700 {% endif %}">
+                                {{ m.range.min }} – {{ m.range.max }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <span>no metrics available</span>
+    {% endif %}
+    <div
+            class="flex items-center justify-center rounded-[8px] bg-white py-2 shadow-sm mt-4"
+        >
+            <a
+                href="{% url 'app.user_measurements'  %}?userid={{user.id}}"
+                class="cursor-pointer font-normal text-blue-500 text-left"
+            >
+                Ver el historial de mediciones
+            </a>
+        </div>
+</div>
+{% endblock %}

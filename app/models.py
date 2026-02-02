@@ -2,6 +2,8 @@ from django.db import models
 from django.utils import timezone
 from django.conf import settings
 from .activity.event_types import ActivityEventType
+from django.core.validators import MinValueValidator, MaxValueValidator
+
 
 class Gym(models.Model):
     id = models.BigAutoField(primary_key=True)
@@ -43,7 +45,20 @@ class GymUser(models.Model):
     join_date = models.DateField()
     birth_date = models.DateField(null=True, blank=True)
     phone = models.CharField(max_length=32, null=True, blank=True)
-    height_cm = models.CharField(max_length=5, null=True, blank=True)
+    height_cm = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[
+            MinValueValidator(100),
+            MaxValueValidator(250),
+        ],
+    )
+    sex = models.CharField(
+        max_length=1,
+        choices=[("M", "Hombre"), ("F", "Mujer")],
+        null=True,
+        blank=True,
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -208,6 +223,22 @@ class MeasurementDefinition(models.Model):
         TEXT = "text", "Texto"
         NUMBER = "#", "Número"
 
+    class MeasurementCode(models.TextChoices):
+        WEIGHT = "weight", "Peso"
+        WAIST = "waist", "Cintura"
+        HIP = "hip", "Cadera"
+        NECK = "neck", "Cuello"
+        BODY_FAT_PERCENT = "body_fat_percent", "Grasa corporal"
+        FAT_MASS = "fat_mass", "Masa grasa"
+        LEAN_MASS = "lean_mass", "Masa magra"
+        MUSCLE_MASS = "muscle_mass", "Masa muscular"
+        BMI = "bmi", "Índice de masa corporal"
+        WHR = "whr", "Relación cintura-cadera"
+        WHTR = "whtr", "Relación cintura-estatura"
+        BMR = "bmr", "Tasa metabólica basal"
+        TDEE = "tdee", "Gasto energético diario total"
+        WATER_PERCENT = "water_percent", "Porcentaje de agua corporal"
+
     id = models.BigAutoField(primary_key=True)
 
     name = models.CharField(max_length=80)
@@ -221,6 +252,13 @@ class MeasurementDefinition(models.Model):
         default=100,
     )
 
+    code = models.CharField(
+        max_length=40,
+        choices=MeasurementCode.choices,
+        unique=True,
+        null=True,
+        blank=True
+    )
     is_required = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
@@ -287,6 +325,7 @@ class MeasurementValue(models.Model):
         null=True,
         blank=True
     )
+    definition_code = models.CharField(max_length=40, null=True, blank=True)
 
     value = models.CharField(max_length=64)
     created_at = models.DateTimeField(default=timezone.now)
