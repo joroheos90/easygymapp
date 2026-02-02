@@ -501,14 +501,14 @@ class BodyMetricsService:
         )
 
         current = values[-1] if values else {}
-        current_value = current["value"]
+        current_value = current.get("value", 0)
 
         min_w, max_w, ideal = BodyMetricsService._weight_range(user)
 
         status = BodyMetricsService._status(current_value, min_w, max_w)
 
         return {
-            "name": current["definition_name"],
+            "name": current.get("definition_name", ""),
             "unit": "kg",
             "current": current_value,
             "range": {"min": min_w, "max": max_w, "ideal": ideal},
