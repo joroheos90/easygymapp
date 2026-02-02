@@ -15,6 +15,7 @@
 {% endblock %}
 
 {% block content %}
+{{ metrics|json_script:"metrics" }}
 <div class="font-roboto flex flex-col gap-6 px-4 py-6">
 
     {% if metrics %}
