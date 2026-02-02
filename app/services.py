@@ -392,8 +392,6 @@ class GymService:
             )
 
 
-from datetime import date
-
 class BodyMetricsService:
 
     @staticmethod
@@ -401,6 +399,11 @@ class BodyMetricsService:
         user = GymUser.objects.only(
             "id", "birth_date", "sex", "height_cm"
         ).get(id=user_id)
+
+        has_values = MeasurementValue.objects.filter(record__user_id=user_id).exists()
+
+        if not has_values:
+            return {}
 
         if not user.birth_date or not user.height_cm:
             return {}
