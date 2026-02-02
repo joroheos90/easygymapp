@@ -19,12 +19,12 @@
 
     {% if metrics %}
     <h1 class="text-xs font-semibold italic text-gray-800">
-        Hola {{ first_name }},
+        Hola <span class="capitalize">{{ first_name }}</span>,
         {% with w=metrics.weight %}
             {% if w.status == "high" and w.trend.direction == "down" %}
                 excelente avance 💪 has bajado de peso y te estás acercando a tu peso más sano ({{ w.range.ideal }} kg).
             {% elif w.status == "high" and w.trend.direction == "up" %}
-                ojo ⚠️ el peso está subiendo y ya se encuentra por encima del rango saludable, ajustemos el plan.
+                ojo ⚠️ el peso está subiendo y ya se encuentra por encima del rango saludable, ánimo tu puedes.
             {% elif w.status == "low" and w.trend.direction == "up" %}
                 muy bien 🌱 estás ganando peso y acercándote al rango saludable.
             {% elif w.status == "low" and w.trend.direction == "down" %}
@@ -218,6 +218,10 @@
                 </tbody>
             </table>
         </div>
+    </div>
+    {% else %}
+    <div class="text-sm text-gray-500 py-4 text-center">
+        Para empezar a ver tu progreso, agrega tu fecha de nacimiento, estatura, sexo y mediciones mensuales
     </div>
     {% endif %}
     <div

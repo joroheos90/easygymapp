@@ -838,7 +838,7 @@ def user(request):
             member.phone = phone
             member.birth_date = birth_date
             member.join_date = join_date
-            member.height_cm = int(height_cm)
+            member.height_cm = int(height_cm) if height_cm else None
             member.sex = sex
             member.save(update_fields=["phone", "birth_date", "join_date", "height_cm", "sex", "updated_at", "gym_id"])
             log_activity(
@@ -1505,9 +1505,6 @@ def user_measurement(request):
     primary_definitions   = list(definitions[:5])
     secondary_definitions = list(definitions[5:])
 
-    # ------------------------------------------------------------------
-    # VALORES EXISTENTES (solo edit)
-    # ------------------------------------------------------------------
     existing_values = {}
     if record:
         for v in record.values.all():
@@ -1536,6 +1533,10 @@ def user_measurement(request):
             y, m, d = map(int, date_s.split("-"))
             record_date = date(y, m, d)
         except Exception:
+            posted_values = {
+                d.name: request.POST.get(f"def_{d.id}")
+                for d in definitions
+            }
             return render(
                 request,
                 "app/user_measurement.html",
@@ -1543,15 +1544,39 @@ def user_measurement(request):
                     "error": "Fecha inválida",
                     "primary_definitions": primary_definitions,
                     "secondary_definitions": secondary_definitions,
-                    "initial": existing_values,
-                    "record": record or {"record_date": timezone.localdate()},
+                    "initial": posted_values,
+                    "record": {"record_date": timezone.localdate(), "notes": notes},
                     "is_edit": is_edit,
                     "user": user,
                     "user_id": user.id,
                 }
             )
 
-        # ---------------- SAVE RECORD ----------------
+        # ---------------- VALIDATE REQUIRED ----------------
+        posted_values = {
+            d.name: request.POST.get(f"def_{d.id}")
+            for d in definitions
+        }
+
+        for d in definitions:
+            raw_value = (request.POST.get(f"def_{d.id}") or "").strip()
+            if d.is_required and not raw_value:
+                return render(
+                    request,
+                    "app/user_measurement.html",
+                    {
+                        "error": "Completa todas las mediciones obligatorias",
+                        "primary_definitions": primary_definitions,
+                        "secondary_definitions": secondary_definitions,
+                        "initial": posted_values,
+                        "record": {"record_date": record_date, "notes": notes},
+                        "is_edit": is_edit,
+                        "user": user,
+                        "user_id": user.id,
+                    }
+                )
+
+        # ---------------- SAVE RECORD + VALUES ----------------
         try:
             with transaction.atomic():
                 if is_edit:
@@ -1559,7 +1584,6 @@ def user_measurement(request):
                     r.record_date = record_date
                     r.notes = notes
                     r.save()
-
                     r.values.all().delete()
                 else:
                     r = MeasurementRecord.objects.create(
@@ -1568,6 +1592,19 @@ def user_measurement(request):
                         record_date=record_date,
                         notes=notes,
                     )
+
+                for d in definitions:
+                    raw_value = (request.POST.get(f"def_{d.id}") or "").strip()
+                    if raw_value:
+                        MeasurementValue.objects.create(
+                            record=r,
+                            definition_name=d.name,     # snapshot
+                            unit_type=d.unit_type,      # snapshot
+                            value=raw_value,
+                            priority=d.priority,
+                            definition_code=d.code,
+                        )
+
         except IntegrityError:
             return render(
                 request,
@@ -1576,44 +1613,13 @@ def user_measurement(request):
                     "error": "Ya existe una medición para esta fecha",
                     "primary_definitions": primary_definitions,
                     "secondary_definitions": secondary_definitions,
-                    "initial": existing_values,
-                    "record": record or {"record_date": record_date},
+                    "initial": posted_values,
+                    "record": {"record_date": record_date, "notes": notes},
                     "is_edit": is_edit,
                     "user": user,
                     "user_id": user.id,
                 }
             )
-
-        # ---------------- SAVE VALUES (SNAPSHOT) ----------------
-        for d in definitions:
-            raw_value = (request.POST.get(f"def_{d.id}") or "").strip()
-
-            if d.is_required and not raw_value:
-                r.delete()
-                return render(
-                    request,
-                    "app/user_measurement.html",
-                    {
-                        "error": "Completa todas las mediciones obligatorias",
-                        "primary_definitions": primary_definitions,
-                        "secondary_definitions": secondary_definitions,
-                        "initial": existing_values,
-                        "record": record or {"record_date": record_date},
-                        "is_edit": is_edit,
-                        "user": user,
-                        "user_id": user.id,
-                    }
-                )
-
-            if raw_value:
-                MeasurementValue.objects.create(
-                    record=r,
-                    definition_name=d.name,     # snapshot
-                    unit_type=d.unit_type,      # snapshot
-                    value=raw_value,
-                    priority=d.priority,
-                    definition_code=d.code,
-                )
 
         return redirect(
             f"{reverse('app.user_measurements')}?userid={user.id}"

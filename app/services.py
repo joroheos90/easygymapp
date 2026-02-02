@@ -542,14 +542,14 @@ class BodyMetricsService:
         )
 
         current = values[-1] if values else {}
-        current_value = current["value"]
+        current_value = current.get("value", 0)
 
         min_w, max_w = BodyMetricsService._waist_range(user.sex)
 
         status = BodyMetricsService._status(current_value, min_w, max_w)
 
         return {
-            "name": current["definition_name"],
+            "name": current.get("definition_name", ""),
             "unit": "cm",
             "current": current_value,
             "range": {"min": min_w, "max": max_w},
@@ -570,11 +570,11 @@ class BodyMetricsService:
         )
 
         current = values[-1] if values else {}
-        current_value = current["value"]
+        current_value = current.get("value", 0)
         min_v, max_v = BodyMetricsService._muscle_range(user.sex)
 
         return {
-            "name": current["definition_name"],
+            "name": current.get("definition_name", ""),
             "unit": "%",
             "current": current_value,
             "range": {"min": min_v, "max": max_v},
@@ -596,11 +596,11 @@ class BodyMetricsService:
         )
 
         current = values[-1] if values else {}
-        current_value = current["value"]
+        current_value = current.get("value", 0)
         min_v, max_v = BodyMetricsService._body_fat_range(user.sex, age)
 
         return {
-            "name": current["definition_name"],
+            "name": current.get("definition_name", ""),
             "unit": "%",
             "current": current_value,
             "range": {"min": min_v, "max": max_v},
