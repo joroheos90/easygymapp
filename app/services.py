@@ -21,6 +21,10 @@ from .models import (
     MeasurementValue,
     MeasurementDefinition,
 )
+from .activity.helpers import log_activity
+from .activity.event_types import ActivityEventType
+from .helpers import slot_start_dt, current_period_for
+
 
 
 # ---------- Domain errors ----------
@@ -681,3 +685,199 @@ class BodyMetricsService:
         if max_v and value > max_v:
             return "high"
         return "ok"
+
+
+class TimeslotPolicy:
+    def __init__(self, *, is_admin, now):
+        self.is_admin = is_admin
+        self.now = now
+
+    @property
+    def enforce_time_rules(self):
+        return not self.is_admin
+
+    def can_use_slot(self, slot):
+        if slot.status != DailyTimeslot.Status.OPEN:
+            return False, "Este horario no está disponible."
+
+        start = slot_start_dt(slot)
+        if start is None:
+            return False, "Este horario no tiene hora configurada."
+
+        if self.enforce_time_rules and start <= self.now:
+            return False, "Este horario ya inició o ya pasó."
+
+        return True, None
+
+    def can_join(self, slot):
+        if not self.enforce_time_rules:
+            return True, None
+
+        if self.now >= slot_start_dt(slot) - timedelta(hours=1):
+            return False, "No puedes inscribirte si falta menos de 1 hora."
+
+        return True, None
+
+    def can_cancel(self, slot):
+        if not self.enforce_time_rules:
+            return True, None
+
+        if self.now >= slot_start_dt(slot) - timedelta(minutes=30):
+            return False, "No puedes cancelar si falta 1 hora o menos."
+
+        return True, None
+
+    def can_switch_from(self, slot):
+        if not self.enforce_time_rules:
+            return True, None
+
+        start = slot_start_dt(slot)
+        if start is None:
+            return False, (
+                "Tu horario actual no tiene hora configurada; "
+                "no es posible cambiar."
+            )
+
+        if self.now >= start - timedelta(hours=1):
+            return False, (
+                "No puedes cambiar de horario si falta 1 hora o menos "
+                "para tu horario actual."
+            )
+
+        return True, None
+
+
+class TimeslotService:
+    def __init__(self, *, request, user, slot):
+        self.request = request
+        self.user = user
+        self.slot = slot
+        self.gym = request.gym
+        self.now = timezone.now()
+
+        self.policy = TimeslotPolicy(
+            is_admin=request.is_admin,
+            now=self.now,
+        )
+
+    def execute(self):
+        # --------------------------------------------------------------
+        # VALIDACIÓN BASE DEL SLOT
+        # --------------------------------------------------------------
+        allowed, error = self.policy.can_use_slot(self.slot)
+        if not allowed:
+            return None, error
+
+        day = self.slot.slot_date
+
+        existing = (
+            TimeslotSignup.objects
+            .select_for_update()
+            .select_related("daily_slot")
+            .filter(
+                gym=self.gym,
+                user=self.user,
+                slot_date=day,
+            )
+            .first()
+        )
+
+        # --------------------------------------------------------------
+        # CANCELACIÓN
+        # --------------------------------------------------------------
+        if existing and existing.daily_slot_id == self.slot.id:
+            allowed, error = self.policy.can_cancel(self.slot)
+            if not allowed:
+                return None, error
+
+            existing.delete()
+            self._log_leave()
+            return "Se canceló tu registro con éxito.", None
+
+        # --------------------------------------------------------------
+        # INSCRIPCIÓN / CAMBIO
+        # --------------------------------------------------------------
+        allowed, error = self.policy.can_join(self.slot)
+        if not allowed:
+            return None, error
+
+        if existing:
+            allowed, error = self.policy.can_switch_from(
+                existing.daily_slot
+            )
+            if not allowed:
+                return None, error
+
+        # --------------------------------------------------------------
+        # PAGO
+        # --------------------------------------------------------------
+        if not self._has_active_payment():
+            return None, "Debes tener tu pago al día para inscribirte."
+
+        # --------------------------------------------------------------
+        # CUPO
+        # --------------------------------------------------------------
+        if not self._has_capacity():
+            return None, "Este horario ya está lleno."
+
+        # --------------------------------------------------------------
+        # EJECUCIÓN
+        # --------------------------------------------------------------
+        if existing:
+            existing.delete()
+
+        TimeslotSignup.objects.create(
+            gym=self.gym,
+            daily_slot=self.slot,
+            user=self.user,
+            slot_date=day,
+            signed_at=self.now,
+        )
+
+        self._log_join()
+        return "Registro completado con éxito.", None
+
+    # --------------------------------------------------------------
+    # HELPERS INTERNOS
+    # --------------------------------------------------------------
+    def _has_active_payment(self):
+        ps, pe = current_period_for(self.user, ref=timezone.localdate())
+        return Payment.objects.filter(
+            gym=self.gym,
+            user=self.user,
+            period_start__lte=ps,
+            period_end__gte=pe,
+        ).exists()
+
+    def _has_capacity(self):
+        capacity = self.slot.capacity or 0
+        if capacity <= 0:
+            return False
+
+        enrolled = TimeslotSignup.objects.filter(
+            daily_slot=self.slot
+        ).count()
+
+        return enrolled < capacity
+
+    def _log_join(self):
+        log_activity(
+            gym=self.gym,
+            actor=self.request.user,
+            event_type=ActivityEventType.GROUP_JOIN,
+            metadata={
+                "group_title": self.slot.title,
+                "group_date": self.slot.slot_date.strftime("%d/%m/%Y"),
+            },
+        )
+
+    def _log_leave(self):
+        log_activity(
+            gym=self.gym,
+            actor=self.request.user,
+            event_type=ActivityEventType.GROUP_LEAVE,
+            metadata={
+                "group_title": self.slot.title,
+                "group_date": self.slot.slot_date.strftime("%d/%m/%Y"),
+            },
+        )

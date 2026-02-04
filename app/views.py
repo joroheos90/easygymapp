@@ -24,8 +24,8 @@ from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods
 
 # Local
-from app.services import GymService, BodyMetricsService
-from .helpers import format_es_date, gym_required, role_required, signed_at_parts, slot_start_dt
+from app.services import GymService, BodyMetricsService, TimeslotService
+from .helpers import format_es_date, gym_required, role_required, signed_at_parts, slot_start_dt, current_period_for
 from .models import BaseTimeslot, DailyTimeslot, Gym, GymUser, Payment, TimeslotSignup, ActivityLog, MeasurementDefinition, MeasurementRecord, MeasurementValue
 from .activity.helpers import log_activity
 from .activity.event_types import ActivityEventType
@@ -265,31 +265,32 @@ def base_hours(request):
 
 
 @login_required
-@role_required(["member"])
+@role_required(["member", "admin"])
 @require_http_methods(["GET", "POST"])
 @gym_required
 def selector(request):
     q = request.GET.get("date") or request.POST.get("date")
-    day = parse_date(q) if q else None
-    if day is None:
-        day = timezone.localdate()
+    user_id = request.GET.get("userid")
+
+    day = parse_date(q) if q else timezone.localdate()
 
     error = None
     success = None
+
+    user = request.gym_user
+    if request.is_admin:
+        user = get_object_or_404(
+            GymUser.objects.filter(gym=request.gym),
+            pk=user_id,
+        )
 
     if request.method == "POST":
         slot_id_raw = request.POST.get("slot_id")
         try:
             slot_id = int(slot_id_raw)
         except (TypeError, ValueError):
-            slot_id = None
-
-        if not slot_id:
-            error = "Horario inválido."
-            messages.error(request, error)
-            return redirect(f"{reverse('app.selector')}?date={day.isoformat()}")
-
-        now = timezone.localtime(timezone.now())
+            messages.error(request, "Horario inválido.")
+            return redirect(f"{reverse('app.selector')}?date={day.isoformat()}&userid={user_id}")
 
         try:
             with transaction.atomic():
@@ -300,107 +301,13 @@ def selector(request):
                     .get(pk=slot_id)
                 )
 
-                if slot.slot_date != day:
-                    day = slot.slot_date
+                service = TimeslotService(
+                    request=request,
+                    user=user,
+                    slot=slot,
+                )
 
-                if slot.status != DailyTimeslot.Status.OPEN:
-                    error = "Este horario no está disponible."
-                else:
-                    slot_start = slot_start_dt(slot)
-
-                    if slot_start is None:
-                        error = "Este horario no tiene hora configurada."
-                    elif slot_start <= now:
-                        error = "Este horario ya inició o ya pasó."
-                    else:
-                        join_deadline = slot_start - timedelta(hours=1)     # Join/change allowed only if >= 1h remain
-                        cancel_deadline = slot_start - timedelta(minutes=30)   # Cancel allowed only if > 30m remain
-
-                        # English: Lock the user's existing signup for that day (if any).
-                        existing = (
-                            TimeslotSignup.objects
-                            .select_for_update()
-                            .select_related("daily_slot")
-                            .filter(gym=request.gym, user=request.gym_user, slot_date=day)
-                            .first()
-                        )
-
-                        # CASE 1: User selected the same slot -> CANCEL (with 1-hour rule)
-                        if existing and existing.daily_slot_id == slot.id:
-                            if now >= cancel_deadline:
-                                error = "No puedes cancelar si falta 1 hora o menos para que inicie el horario."
-                            else:
-                                existing.delete()
-                                log_activity(
-                                            gym=request.gym,
-                                            actor=request.user,
-                                            event_type=ActivityEventType.GROUP_LEAVE,
-                                            metadata={
-                                                "group_title": slot.title,
-                                                "group_date": slot.slot_date.strftime("%d/%m/%Y"),
-                                            }
-                                        )
-                                success = "Se canceló tu registro con éxito."
-
-                        # CASE 2: User is joining or switching to a different slot -> JOIN (with 1-hour rule)
-                        else:
-                            if now >= join_deadline:
-                                error = "No puedes inscribirte a este horario si falta menos de 1 hora para que inicie."
-                            else:
-                                # English: If switching from a previous slot, verify cancellation window (> 1h left)
-                                if existing and existing.daily_slot_id != slot.id:
-                                    prev_slot = existing.daily_slot
-                                    prev_start = slot_start_dt(prev_slot)
-
-                                    if prev_start is None:
-                                        error = "Tu horario actual no tiene hora configurada; no es posible cambiar."
-                                    else:
-                                        prev_cancel_deadline = prev_start - timedelta(hours=1)
-                                        if now >= prev_cancel_deadline:
-                                            error = "No puedes cambiar de horario si falta 1 hora o menos para tu horario actual."
-
-                            # If still no errors, continue with payment + capacity + create
-                            if not error:
-                                ps, pe = _current_period_for(request.gym_user, ref=timezone.localdate())
-                                has_paid = Payment.objects.filter(
-                                    gym=request.gym,
-                                    user=request.gym_user,
-                                    period_start__lte=ps,
-                                    period_end__gte=pe,
-                                ).exists()
-
-                                if not has_paid:
-                                    error = "Debes tener tu pago al día para inscribirte."
-                                else:
-                                    enrolled = TimeslotSignup.objects.filter(daily_slot=slot).count()
-                                    cap = slot.capacity or 0
-
-                                    if cap <= 0:
-                                        error = "Este horario no tiene cupo configurado."
-                                    elif enrolled >= cap:
-                                        error = "Este horario ya está lleno."
-                                    else:
-                                        # English: If user had another slot that day, remove it first.
-                                        if existing:
-                                            existing.delete()
-
-                                        TimeslotSignup.objects.create(
-                                            gym=request.gym,
-                                            daily_slot=slot,
-                                            user=request.gym_user,
-                                            slot_date=slot.slot_date,  # NOT NULL
-                                            signed_at=timezone.now(),
-                                        )
-                                        log_activity(
-                                            gym=request.gym,
-                                            actor=request.user,
-                                            event_type=ActivityEventType.GROUP_JOIN,
-                                            metadata={
-                                                "group_title": slot.title,
-                                                "group_date": slot.slot_date.strftime("%d/%m/%Y"),
-                                            }
-                                        )
-                                        success = "Registro completado con éxito."
+                success, error = service.execute()
 
         except DailyTimeslot.DoesNotExist:
             error = "Horario inválido."
@@ -410,24 +317,35 @@ def selector(request):
         elif success:
             messages.success(request, success)
 
-        return redirect(f"{reverse('app.selector')}?date={day.isoformat()}")
+        return redirect(f"{reverse('app.selector')}?date={day.isoformat()}&userid={user_id}")
+    
 
-    # GET: Load data for UI (always)
     prev_day = day - timedelta(days=1)
     next_day = day + timedelta(days=1)
 
     my_slot_ids = set(
         TimeslotSignup.objects
-        .filter(gym=request.gym, user=request.gym_user, slot_date=day)
+        .filter(gym=request.gym, user=user, slot_date=day)
         .values_list("daily_slot_id", flat=True)
     )
 
     slots = (
         DailyTimeslot.objects
-        .filter(gym=request.gym, slot_date=day, status=DailyTimeslot.Status.OPEN)
+        .filter(
+            gym=request.gym,
+            slot_date=day,
+            status=DailyTimeslot.Status.OPEN,
+        )
         .annotate(enrolled=Count("signups"))
         .order_by("day_order")
-        .only("id", "slot_date", "title", "capacity", "status", "start_time")
+        .only(
+            "id",
+            "slot_date",
+            "title",
+            "capacity",
+            "status",
+            "start_time",
+        )
     )
 
     hours = []
@@ -435,8 +353,7 @@ def selector(request):
         cap = s.capacity or 0
         enrolled = int(s.enrolled or 0)
         pct = int(round((enrolled / cap) * 100)) if cap > 0 else 0
-        if pct > 100:
-            pct = 100
+        pct = min(pct, 100)
 
         hours.append({
             "id": s.id,
@@ -447,43 +364,20 @@ def selector(request):
             "status": s.status,
             "occupancy_pct": pct,
             "occupancy_width": f"{pct}%",
-            "is_mine": (s.id in my_slot_ids),
+            "is_mine": s.id in my_slot_ids,
         })
 
     ctx = {
         "hours": hours,
+        "user": user,
         "date": format_es_date(day, include_year=False, include_weekday=True),
         "raw_date": day.isoformat(),
         "prev_date": prev_day.isoformat(),
         "next_date": next_day.isoformat(),
-        "error": error,
-        "success": success,
         "now_local": timezone.localtime(timezone.now()),
-
     }
     return render(request, "app/hourselection.html", ctx)
 
-
-def _current_period_for(user: GymUser, ref: date | None = None) -> tuple[date, date]:
-    today = ref or timezone.localdate()
-    anchor = user.join_date.day
-
-    current_max_day = monthrange(today.year, today.month)[1]
-    anchor_current_month = min(anchor, current_max_day)
-
-    if today.day < anchor_current_month:
-        # Todavía no llegamos al anchor de este mes → usar mes anterior
-        prev_month_first = today.replace(day=1) - relativedelta(months=1)
-        prev_max_day = monthrange(prev_month_first.year, prev_month_first.month)[1]
-        anchor_prev_month = min(anchor, prev_max_day)
-        start = prev_month_first.replace(day=anchor_prev_month)
-    else:
-        # Ya estamos en o después del anchor de este mes
-        start = today.replace(day=anchor_current_month)
-
-    end = start + relativedelta(months=1)
-
-    return start, end
 
 @login_required
 @role_required(["admin"])
@@ -531,7 +425,7 @@ def users(request):
 
         out = []
         for u in qs:
-            ps, pe = _current_period_for(u, ref=today)
+            ps, pe = current_period_for(u, ref=today)
             paid = Payment.objects.filter(
                 gym=request.gym,
                 user=u,
@@ -571,7 +465,7 @@ def users(request):
                 include = True
 
             if include:
-                _, de = _current_period_for(u)
+                _, de = current_period_for(u)
                 out.append({
                     "id": u.id,
                     "full_name": u.full_name,
@@ -626,7 +520,7 @@ def profile(request):
     ).exists()
 
 
-    ps, pe = _current_period_for(user)
+    ps, pe = current_period_for(user)
     has_paid = Payment.objects.filter(
         gym=request.gym, user=user, period_start__lte=ps, period_end__gte=pe
     ).exists()

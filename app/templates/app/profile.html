@@ -351,6 +351,16 @@
                 Ver sus pagos
             </a>
         </div>
+        <div
+            class="flex items-center justify-center rounded-[8px] bg-white py-2 shadow-sm mt-4"
+        >
+            <a
+                href="{% url 'app.selector'%}?userid={{user.id}}"
+                class="cursor-pointer font-normal text-blue-500 text-left"
+            >
+                Seleccionar su horario
+            </a>
+        </div>
         {% endif %}
         {% if not request.is_admin and user.has_measurements %}
         <div

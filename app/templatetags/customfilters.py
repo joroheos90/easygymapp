@@ -6,6 +6,13 @@ from django.utils.html import format_html
 register = template.Library()
 
 @register.filter
+def first_name(full_name):
+    if not full_name:
+        return ""
+
+    return full_name.strip().split()[0]
+
+@register.filter
 def initials(value: str, max_letters: int = 2) -> str:
     if not value:
         return ""
@@ -34,13 +41,10 @@ def get_item(d, key):
 
 @register.filter
 def percent_of(value, max_value):
-    """
-    Calcula el porcentaje relativo de 'value' dentro del rango 40 - max_value
-    """
     try:
-        min_base = 40  # tu mínimo de la escala
+        min_base = 40 
         percent = ((float(value) - min_base) / (float(max_value) - min_base)) * 100
-        return f"{percent:.2f}"  # siempre con 2 decimales
+        return f"{percent:.2f}"
     except (ValueError, ZeroDivisionError):
         return "0"
 
