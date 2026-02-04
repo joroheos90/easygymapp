@@ -1,4 +1,4 @@
-{% extends "app/base.html" %} {% load customfilters %} {% block title %}Miembros en {{gym_name}}{% endblock %} {% block headerTitle %}Miembros en {{gym_name}}{% endblock %} 
+{% extends "app/base.html" %} {% load customfilters %} {% block title %}Miembros en {{gym_name}}{% endblock %} {% block headerTitle %}<span class="capitalize">{{gym_name}}</span> {% endblock %} 
 {% block headerButtons %}
 <a href="{% url 'app.admin' %}" class="cursor-pointer text-lg font-normal">
     <svg

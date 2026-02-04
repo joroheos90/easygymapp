@@ -92,11 +92,30 @@ def home(request):
 def admin(request):
     today = timezone.localdate()
 
-    active_members = GymUser.objects.filter(gym=request.gym, is_active=True, role="member").count()
-
-    today = timezone.localdate()
     first_day = today.replace(day=1)
     first_day_next = first_day + relativedelta(months=1)
+
+    active_members = GymUser.objects.filter(gym=request.gym, is_active=True, role="member").count()
+
+    new_members = GymUser.objects.filter(
+        gym=request.gym, 
+        is_active=True, 
+        role="member",
+        join_date__month = today.month,
+        join_date__year = today.year ).count()
+
+
+    total_assist = TimeslotSignup.objects.filter(
+        gym=request.gym,
+        slot_date__year=today.year,
+        slot_date__month=today.month
+    ).count()
+
+    total_hours = DailyTimeslot.objects.filter(
+        gym=request.gym,
+        slot_date__year=today.year,
+        slot_date__month=today.month
+    ).count()
 
     qs = (
         Payment.objects
@@ -113,6 +132,9 @@ def admin(request):
 
     ctx = {
         "active_members": active_members,
+        "new_members": new_members,
+        "total_assist": total_assist,
+        "total_hours": total_hours,
         "period_income": period_income,
         "period_label": _period_label(today.year, today.month),
         "gym_name": request.gym.name
@@ -328,6 +350,7 @@ def selector(request):
         .filter(gym=request.gym, user=user, slot_date=day)
         .values_list("daily_slot_id", flat=True)
     )
+
 
     slots = (
         DailyTimeslot.objects
