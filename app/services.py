@@ -485,21 +485,39 @@ class BodyMetricsService:
 
 
     @staticmethod
-    def _build_trend(values):
+    def _build_trend(values, status=None):
         if len(values) < 2:
-            return {"delta": None, "direction": None, "values": values}
+            return {
+                "delta": None,
+                "direction": None,
+                "sentiment": "neutral",
+                "values": values,
+            }
 
         delta = round(values[-1]["value"] - values[0]["value"], 1)
 
+        if delta > 0:
+            direction = "up"
+        elif delta < 0:
+            direction = "down"
+        else:
+            direction = "flat"
+
+        if status == "ok":
+            sentiment = "good"
+        elif status == "high":
+            sentiment = "good" if direction == "down" else "bad"
+        elif status == "low":
+            sentiment = "good" if direction == "up" else "bad"
+        else:
+            sentiment = "neutral"
+
         return {
             "delta": delta,
-            "direction": "up" if delta > 0 else "down" if delta < 0 else "flat",
+            "direction": direction,
+            "sentiment": sentiment,
             "values": values,
         }
-
-    # -------------------------
-    # Peso
-    # -------------------------
 
     @staticmethod
     def _weight_metric(user, age, month, year):
@@ -520,7 +538,7 @@ class BodyMetricsService:
             "current": current_value,
             "range": {"min": min_w, "max": max_w, "ideal": ideal},
             "status": status,
-            "trend": BodyMetricsService._build_trend(values),
+            "trend": BodyMetricsService._build_trend(values, status),
         }
 
     @staticmethod
@@ -561,7 +579,7 @@ class BodyMetricsService:
             "current": current_value,
             "range": {"min": min_w, "max": max_w},
             "status": status,
-            "trend": BodyMetricsService._build_trend(values),
+            "trend": BodyMetricsService._build_trend(values, status),
         }
 
     @staticmethod
@@ -580,13 +598,15 @@ class BodyMetricsService:
         current_value = current.get("value", 0)
         min_v, max_v = BodyMetricsService._muscle_range(user.sex)
 
+        status = BodyMetricsService._status(current_value, min_v, max_v)
+
         return {
             "name": current.get("definition_name", ""),
             "unit": "%",
             "current": current_value,
             "range": {"min": min_v, "max": max_v},
-            "status": BodyMetricsService._status(current_value, min_v, max_v),
-            "trend": BodyMetricsService._build_trend(values),
+            "status": status,
+            "trend": BodyMetricsService._build_trend(values, status),
         }
 
     @staticmethod
@@ -606,13 +626,15 @@ class BodyMetricsService:
         current_value = current.get("value", 0)
         min_v, max_v = BodyMetricsService._body_fat_range(user.sex, age)
 
+        status = BodyMetricsService._status(current_value, min_v, max_v)
+
         return {
             "name": current.get("definition_name", ""),
             "unit": "%",
             "current": current_value,
             "range": {"min": min_v, "max": max_v},
-            "status": BodyMetricsService._status(current_value, min_v, max_v),
-            "trend": BodyMetricsService._build_trend(values),
+            "status": status,
+            "trend": BodyMetricsService._build_trend(values, status),
         }
 
 
@@ -662,13 +684,15 @@ class BodyMetricsService:
         current = bmi_values[-1]["value"]
         min_v, max_v = 18.5, 24.9
 
+        status = BodyMetricsService._status(current, min_v, max_v)
+
         return {
             "name": "bmi",
             "unit": "kg/m2",
             "current": current,
             "range": {"min": min_v, "max": max_v},
-            "status": BodyMetricsService._status(current, min_v, max_v),
-            "trend": BodyMetricsService._build_trend(bmi_values),
+            "status": status,
+            "trend": BodyMetricsService._build_trend(bmi_values, status),
         }
 
 

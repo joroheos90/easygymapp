@@ -1573,7 +1573,6 @@ def nutrition_dashboard(request):
 
     context = {
         "user": user,
-        "first_name": user.full_name.split()[0] if user.full_name else "",
         "year": year,
         "month": month,
         "metrics": metrics,
