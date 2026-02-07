@@ -35,6 +35,19 @@
     <body>
         {% block body %}
         <div class="flex min-h-svh w-full flex-col {% block bg-body %} bg-gray-50{% endblock %}">
+            {% if messages %} {% for m in messages %} {% if m.tags == 'error' %}
+            <div
+                class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-red-600 p-4 text-center text-base font-bold text-white"
+            >
+                {{ m }}
+            </div>
+            {% elif m.tags == 'success' %}
+            <div
+                class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-green-600 p-4 text-center text-base font-bold text-white"
+            >
+                {{ m }}
+            </div>
+            {% endif %} {% endfor %} {% endif %}
             {% block header %}
             <div
                 id="header"

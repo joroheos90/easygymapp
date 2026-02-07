@@ -25,19 +25,7 @@
             Selecciona un horario para <span class="capitalize">{{ user.full_name|first_name }}</span> 
         </h1>
     {% endif %}
-    {% if messages %} {% for m in messages %} {% if m.tags == 'error' %}
-    <div
-        class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-red-600 p-4 text-center text-base font-bold text-white"
-    >
-        {{ m }}
-    </div>
-    {% elif m.tags == 'success' %}
-    <div
-        class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-green-600 p-4 text-center text-base font-bold text-white"
-    >
-        {{ m }}
-    </div>
-    {% endif %} {% endfor %} {% endif %}
+
 
     <div class="flex flex-row items-center justify-between">
         <a class="px-4" href="?date={{ prev_date }}&userid={{user.id}}">
