@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from typing import Iterable, Optional, Tuple
 from dateutil.relativedelta import relativedelta
 from calendar import monthrange
+import calendar
 from django.contrib.auth import get_user_model
 from uuid import uuid4
 
@@ -46,19 +47,20 @@ def to_cents(amount: float | int) -> int:
     return int(round(float(amount) * 100))
 
 
+def safe_replace(year: int, month: int, day: int) -> date:
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(day, last_day))
+
 def current_period_for(user: GymUser, ref: Optional[date] = None) -> Tuple[date, date]:
-    """
-    Monthly period anchored to user's join_date day.
-    End is exclusive.
-    """
     today = ref or date.today()
     base_day = user.join_date.day
 
-    # If today's day is before base_day, current period started last month at base_day.
     if today.day < base_day:
-        start = (today.replace(day=1) - relativedelta(months=1)).replace(day=base_day)
+        prev_month = today.replace(day=1) - relativedelta(months=1)
+        start = safe_replace(prev_month.year, prev_month.month, base_day)
     else:
-        start = today.replace(day=base_day)
+        start = safe_replace(today.year, today.month, base_day)
+
     end = start + relativedelta(months=1)
     return start, end
 
