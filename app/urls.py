@@ -21,7 +21,6 @@ urlpatterns = [
     #members
 
     #shared
-    path("selector", views.selector, name="app.selector"),
     path("", views.home, name="app.home"),
     path("profile", views.profile, name="app.profile"),
     path("user", views.user, name="app.edit"),

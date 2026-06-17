@@ -749,7 +749,7 @@ class TimeslotPolicy:
             return True, None
 
         if self.now >= slot_start_dt(slot) - timedelta(minutes=30):
-            return False, "No puedes cancelar si falta 1 hora o menos."
+            return False, "No puedes cancelar si falta 30 minutos o menos."
 
         return True, None
 
@@ -764,9 +764,9 @@ class TimeslotPolicy:
                 "no es posible cambiar."
             )
 
-        if self.now >= start - timedelta(hours=1):
+        if self.now >= start - timedelta(minutes=30):
             return False, (
-                "No puedes cambiar de horario si falta 1 hora o menos "
+                "No puedes cambiar de horario si falta 30 minutos o menos "
                 "para tu horario actual."
             )
 
