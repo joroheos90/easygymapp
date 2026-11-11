@@ -1,14 +1,9 @@
-{% extends "app/base.html" %} {% load customfilters %} {% load humanize %} 
+{% extends "app/base.html" %}
+{% load static %}
+{% load customfilters %} {% load humanize %} 
 {% block title %}{{gym_name}}{% endblock %} {% block headerTitle %}
 <div class="flex items-center justify-between">
-    <div class="flex items-center gap-2">
-        <img
-            width="25"
-            src="https://www.datocms-assets.com/142867/1769576252-easygym-edited.png"
-            alt="Logo Easy Gym"
-        />
-        <span class="text-lg font-semibold">Easy Gym</span>
-    </div>
+    <img width="20" src="{% static 'app/icon.png'%}" alt="Easy Gym">
 </div>
 {% endblock %} {% block headerButtons %}
 <a href="{% url 'app.home' %}" class="cursor-pointer text-lg font-normal">

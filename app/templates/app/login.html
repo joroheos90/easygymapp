@@ -1,40 +1,148 @@
-{% extends "app/base.html" %} {% load customfilters %} {% block title %}Login{% endblock %} {% block body %}
-<div class="relative min-h-svh w-full">
-    <div class="absolute inset-0 -z-1">
+
+{% extends "app/base.html" %}
+{% load static %}
+{% load customfilters %}
+{% block title %}Login | EasyGym{% endblock %}
+{% block body %}
+
+<div class="relative isolate flex min-h-svh w-full items-center justify-center overflow-hidden bg-[#080b09] text-white">
+
+    <!-- Background -->
+    <div class="absolute inset-0 -z-20">
         <img
-            class="h-full w-full object-cover"
+            class="h-full w-full object-cover object-center"
             src="https://www.datocms-assets.com/142867/1762071570-easy-gym.png"
             alt=""
         />
     </div>
-    <div
-        class="flex w-full min-h-svh flex-col items-center gap-14 bg-black/60 py-17"
-    >
-        <h1 class="text-[42px] font-extrabold text-center leading-none text-white">Bienvenido a Visan</h1>
-        <div class="flex w-full flex-col gap-4 px-6">
-            <form method="post" class="flex flex-col gap-12">
-                {% csrf_token %}
-                <div class="flex flex-col rounded-[8px] bg-white px-4">
-                    <div class="relative">
-                        <span class="absolute top-4 text-xs">No. Miembro</span>
-                        {{ form.username|add_class:"w-full pl-19 border-b border-gray-300 px-1 py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none" }}
-                    </div>
-                    <div class="relative">
-                        <span class="absolute top-4 text-xs">Contraseña</span>
-                        {{ form.password|add_class:"w-full pl-19 px-1 py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none" }}
 
-                    </div>
-                    
-                </div>
-                {% if form.non_field_errors %}
-                <div class="fixed right-2 bottom-0 left-2 rounded-t-[12px] bg-red-600 p-4 text-center text-base font-bold text-white">
-                    {{ form.non_field_errors }}
-                  </div>
-                {% endif %}
-                <input type="submit" class="h-[56px] w-full cursor-pointer rounded-[8px] bg-blue-600 text-xl font-bold text-white transition-all ease-in-out hover:bg-blue-500 hover:shadow-2xs" value="Entrar"/>
-            </form>
+    <!-- Overlays -->
+    <div class="absolute inset-0 -z-10 bg-black/60"></div>
+    <div class="absolute inset-0 -z-10 bg-gradient-to-t from-[#080b09] via-black/30 to-black/50"></div>
+    <div class="absolute inset-0 -z-10 bg-gradient-to-r from-black/40 via-transparent to-black/30"></div>
+
+    <!-- Header -->
+    <header class="absolute inset-x-0 top-0 flex items-center px-5 py-5 sm:px-10 sm:py-7">
+        <img width="100" src="{% static 'app/logo.png'%}" alt="Easy Gym">
+    </header>
+
+    <!-- Main -->
+    <main class="mx-auto flex w-full max-w-md flex-col items-center px-5 pb-12 pt-28 sm:px-8">
+
+        <!-- Welcome -->
+        <div class="mb-9 text-center">
+
+            <span class="mb-5 inline-flex items-center gap-2 rounded-full border border-green-400/30 bg-green-400/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-green-300 backdrop-blur-md">
+                <span class="size-1.5 rounded-full bg-green-400 shadow-[0_0_10px_#4ade80]"></span>
+                Acceso a miembros
+            </span>
+
+            <h1 class="text-4xl font-black tracking-tight text-white drop-shadow-2xl sm:text-5xl">
+                Bienvenido
+                <span class="mt-1 block text-green-400">a EasyGym</span>
+            </h1>
+
+            <p class="mt-4 text-sm text-white/60">
+                Ingresa tus datos para continuar.
+            </p>
+
         </div>
-    </div>
+
+        <!-- Login card -->
+        <section class="w-full overflow-hidden rounded-3xl border border-white/15 bg-[#111713]/85 shadow-2xl shadow-black/40 backdrop-blur-2xl">
+
+            <div class="p-5 sm:p-8">
+
+                <div class="mb-7">
+                    <h2 class="text-lg font-extrabold text-white">
+                        Iniciar sesión
+                    </h2>
+                    <p class="mt-1 text-xs text-white/45">
+                        Accede a tu cuenta de entrenamiento
+                    </p>
+                </div>
+
+                <form method="post" class="flex flex-col gap-5">
+                    {% csrf_token %}
+
+                    <!-- Member number -->
+                    <div class="flex flex-col gap-2">
+                        <label for="{{ form.username.id_for_label }}" class="text-xs font-semibold text-white/70">
+                            Número de miembro
+                        </label>
+
+                        <div class="flex h-14 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.05] px-4 transition focus-within:border-green-400/60 focus-within:bg-white/[0.08]">
+
+                            <svg class="size-5 shrink-0 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 7.5a3 3 0 11-6 0 3 3 0 016 0zM4.5 19.5a7.5 7.5 0 0115 0" />
+                            </svg>
+
+                            {{ form.username|add_class:"w-full border-0 bg-transparent p-0 text-sm text-white placeholder:text-white/30 outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0" }}
+
+                        </div>
+                    </div>
+
+                    <!-- Password -->
+                    <div class="flex flex-col gap-2">
+                        <label for="{{ form.password.id_for_label }}" class="text-xs font-semibold text-white/70">
+                            Contraseña
+                        </label>
+
+                        <div class="flex h-14 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.05] px-4 transition focus-within:border-green-400/60 focus-within:bg-white/[0.08]">
+
+                            <svg class="size-5 shrink-0 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 00-9 0v3.75m-.75 0h10.5A2.25 2.25 0 0119.5 12.75v6A2.25 2.25 0 0117.25 21h-10.5a2.25 2.25 0 01-2.25-2.25v-6A2.25 2.25 0 016.75 10.5z" />
+                            </svg>
+
+                            {{ form.password|add_class:"w-full border-0 bg-transparent p-0 text-sm text-white placeholder:text-white/30 outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0" }}
+
+                        </div>
+                    </div>
+
+                    <!-- Errors -->
+                    {% if form.non_field_errors %}
+                    <div class="rounded-xl border border-red-400/20 bg-red-500/10 p-4 text-sm font-medium text-red-300">
+                        {{ form.non_field_errors }}
+                    </div>
+                    {% endif %}
+
+                    {% if form.username.errors or form.password.errors %}
+                    <div class="rounded-xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-300">
+                        {{ form.username.errors }}
+                        {{ form.password.errors }}
+                    </div>
+                    {% endif %}
+
+                    <!-- Submit -->
+                    <button
+                        type="submit"
+                        class="group mt-2 flex h-14 w-full cursor-pointer items-center justify-center gap-3 rounded-xl bg-green-400 px-5 text-sm font-extrabold text-[#06130b] shadow-lg shadow-green-950/30 transition duration-200 hover:-translate-y-0.5 hover:bg-green-300 hover:shadow-green-400/20 active:translate-y-0 active:scale-[0.99]"
+                    >
+                        Entrar a mi cuenta
+
+                        <svg class="size-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-7-7l7 7-7 7" />
+                        </svg>
+                    </button>
+
+                </form>
+
+                <div class="mt-6 flex items-center justify-center gap-2 text-[11px] text-white/35">
+                    <svg class="size-4 text-green-400/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m6 2.25a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Acceso seguro a tu cuenta
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <p class="mt-8 text-[10px] font-medium tracking-[0.2em] text-white/35">
+            POWERED BY <span class="font-black text-white/60">EASYGYM</span>
+        </p>
+
+    </main>
 </div>
 
 {% endblock %}

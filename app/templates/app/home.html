@@ -1,50 +1,207 @@
-{% extends "app/base.html" %} {% block title %}Home{% endblock %} {% block body %}
-<div class="relative min-h-svh w-full">
-    <div class="absolute inset-0 -z-1">
+{% extends "app/base.html" %}
+{% load static %}
+{% block title %}EasyGym{% endblock %} {% block body %}
+
+<div
+    class="relative isolate flex min-h-svh w-full items-center justify-center overflow-hidden bg-[#080b09] text-white"
+>
+    <!-- Background -->
+    <div class="absolute inset-0 -z-20">
         <img
-            class="h-full w-full object-cover"
+            class="h-full w-full object-cover object-center"
             src="https://www.datocms-assets.com/142867/1762071570-easy-gym.png"
             alt=""
         />
     </div>
 
-    {% if user.is_authenticated %}
-    <form
-        action="{% url 'app.logout' %}"
-        method="post"
-        class="inline absolute bottom-4 left-4"
-    >
-        {% csrf_token %}
-        <button type="submit" class="h-[35px] cursor-pointer px-3 flex items-center justify-center rounded-[8px] bg-blue-500 text-white text-sm font-medium shadow-sm hover:bg-blue-600 active:bg-blue-700 transition-colors">
-            Cerrar Sesión
-        </button>
-    </form>
-    {% endif %}
-
+    <!-- Overlays -->
+    <div class="absolute inset-0 -z-10 bg-black/55"></div>
     <div
-        class="flex min-h-svh w-full flex-col items-center gap-14 bg-black/60 py-17"
-    >
-        <h1 class="text-[40px] font-extrabold leading-[45px] text-white text-center">Bienvenido<br> a Visan</h1>
+        class="absolute inset-0 -z-10 bg-gradient-to-t from-[#080b09] via-black/30 to-black/50"
+    ></div>
+    <div
+        class="absolute inset-0 -z-10 bg-gradient-to-r from-black/40 via-transparent to-black/30"
+    ></div>
 
-        <!-- Selector/cambiador de gym -->
-        <form method="post" class="flex w-full flex-col gap-4 px-6 text-white">
-            {% csrf_token %} {% for g in gyms %}
+    <!-- Header -->
+    <header
+        class="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-5 py-5 sm:px-10 sm:py-7"
+    >
+            <img width="100" src="{% static 'app/logo.png'%}" alt="Easy Gym">
+
+        {% if user.is_authenticated %}
+        <form action="{% url 'app.logout' %}" method="post">
+            {% csrf_token %}
             <button
                 type="submit"
-                name="gym_id"
-                value="{{ g.id }}"
-                class="flex h-[100px] cursor-pointer w-full flex-row items-center gap-6 rounded-[24px] bg-black/70 px-4 border {% if selected_gym_id == g.id %} border-green-400 {% else %} border-transparent {% endif %}"
+                class="flex h-10 cursor-pointer items-center gap-2 rounded-full border border-white/20 bg-black/30 px-4 text-xs font-semibold text-white/80 backdrop-blur-md transition hover:bg-white/15 hover:text-white"
             >
-
-                <span class="text-lg font-bold uppercase">{{ g.name }}</span>
-                {% if selected_gym_id == g.id %}
-                <span class="ml-auto text-green-300 text-sm">Seleccionado</span>
-                {% else %}
-                <span class="ml-auto text-blue-300 text-sm">Seleccionar</span>
-                {% endif %}
+                <svg
+                    class="size-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6A2.25 2.25 0 005.25 5.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M18 15l3-3m0 0l-3-3m3 3H9"
+                    />
+                </svg>
+                Cerrar sesión
             </button>
-            {% endfor %}
         </form>
-    </div>
+        {% endif %}
+    </header>
+
+    <!-- Main content -->
+    <main
+        class="mx-auto flex w-full max-w-5xl flex-col items-center px-5 pb-12 pt-28 sm:px-8"
+    >
+        <!-- Welcome -->
+        <div class="mb-9 text-center sm:mb-12">
+            <span
+                class="mb-5 inline-flex items-center gap-2 rounded-full border border-green-400/30 bg-green-400/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-green-300 backdrop-blur-md"
+            >
+                <span
+                    class="size-1.5 rounded-full bg-green-400 shadow-[0_0_10px_#4ade80]"
+                ></span>
+                Tu entrenamiento comienza aquí
+            </span>
+
+            <h1
+                class="text-4xl font-black tracking-tight text-white drop-shadow-2xl sm:text-5xl md:text-6xl"
+            >
+                Bienvenido
+                <span class="mt-1 block text-green-400"> a Visan </span>
+            </h1>
+
+            <p
+                class="mx-auto mt-4 max-w-md text-sm leading-relaxed text-white/65 sm:text-base"
+            >
+                Selecciona tu gimnasio y prepárate para entrenar.
+            </p>
+        </div>
+
+        <!-- Gym selection card -->
+        <section
+            class="w-full max-w-xl overflow-hidden rounded-3xl border border-white/15 bg-[#111713]/80 shadow-2xl shadow-black/40 backdrop-blur-2xl"
+        >
+            <div class="p-5 sm:p-7">
+                <div class="mb-5 flex items-center justify-between">
+                    <div>
+                        <p
+                            class="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40"
+                        >
+                            Tu gimnasio
+                        </p>
+                        <p class="mt-1 text-sm text-white/70">
+                            Selecciona un espacio para continuar
+                        </p>
+                    </div>
+
+                    <span
+                        class="rounded-full text-nowrap bg-green-400/10 px-3 py-1.5 text-[10px] font-bold text-green-400 ring-1 ring-green-400/20"
+                    >
+                        {{ gyms|length }} {% if gyms|length == 1 %}GIMNASIO{% else %}GIMNASIOS{% endif %}
+                    </span>
+                </div>
+
+                <!-- Gym selector -->
+                <form method="post" class="flex flex-col gap-3">
+                    {% csrf_token %} {% for g in gyms %}
+                    <button
+                        type="submit"
+                        name="gym_id"
+                        value="{{ g.id }}"
+                        class="group flex min-h-[76px] w-full cursor-pointer items-center gap-4 rounded-2xl border p-4 text-left transition duration-200 hover:-translate-y-0.5 {% if selected_gym_id == g.id %} border-green-400/50 bg-green-400/[0.08] shadow-lg shadow-green-950/20 {% else %} border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.07] {% endif %}"
+                    >
+                        <!-- Gym icon -->
+                        <div
+                            class="flex size-12 shrink-0 items-center justify-center rounded-xl transition {% if selected_gym_id == g.id %} bg-green-400 text-[#07140d] {% else %} bg-white/10 text-white/60 group-hover:bg-white/15 group-hover:text-white {% endif %}"
+                        >
+                            <svg
+                                class="size-6"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                stroke-width="1.8"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    d="M6.5 6.5v11m11-11v11M3 9v6m18-6v6M6.5 12h11"
+                                />
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    d="M3 12h3.5m11 0H21"
+                                />
+                            </svg>
+                        </div>
+
+                        <!-- Gym name -->
+                        <div class="min-w-0 flex-1">
+                            <h2
+                                class="truncate text-sm font-extrabold uppercase tracking-wide text-white sm:text-base"
+                            >
+                                {{ g.name }}
+                            </h2>
+
+                            <p class="mt-1 text-xs text-white/45">
+                                Centro de entrenamiento
+                            </p>
+                        </div>
+
+                        <!-- Status -->
+                        {% if selected_gym_id == g.id %}
+                        <div class="flex shrink-0 items-center gap-2">
+                            <span
+                                class="hidden text-[10px] font-bold uppercase tracking-wider text-green-400 sm:block"
+                            >
+                                Seleccionado
+                            </span>
+                            <span
+                                class="flex size-7 items-center justify-center rounded-full bg-green-400 text-sm font-black text-[#07140d]"
+                            >
+                                ✓
+                            </span>
+                        </div>
+                        {% else %}
+                        <span
+                            class="flex size-7 shrink-0 items-center justify-center rounded-full border border-white/20 text-white/40 transition group-hover:border-green-400 group-hover:text-green-400"
+                        >
+                            <svg
+                                class="size-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    d="M9 5l7 7-7 7"
+                                />
+                            </svg>
+                        </span>
+                        {% endif %}
+                    </button>
+                    {% endfor %}
+                </form>
+
+                <p class="mt-5 text-center text-[11px] text-white/35">
+                    Accede a tu espacio de entrenamiento
+                </p>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <p class="mt-8 text-[10px] font-medium tracking-[0.2em] text-white/35">
+            POWERED BY <span class="font-black text-white/60">EASYGYM</span>
+        </p>
+    </main>
 </div>
+
 {% endblock %}
