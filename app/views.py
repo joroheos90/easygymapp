@@ -1110,15 +1110,6 @@ def payments(request):
             userid = None
 
     filt = (request.GET.get("filter") or "all").strip().lower()
-    # Acepta alias comunes
-    if filt in {"hoy"}:
-        filt = "today"
-    if filt in {"ultimos_3", "3"}:
-        filt = "last_3"
-    if filt in {"ultimos_7", "7"}:
-        filt = "last_7"
-    if filt in {"mes", "current_month"}:
-        filt = "month"
 
     today = timezone.localdate()
 
@@ -1146,7 +1137,7 @@ def payments(request):
     elif filt == "last_7":
         since = today - timedelta(days=7)
         qs = qs.filter(paid_at__date__gte=since)
-    elif filt == "month":
+    elif filt == "current_month":
         qs = qs.filter(paid_at__year=today.year, paid_at__month=today.month)
     # "all" -> sin filtro extra
 
