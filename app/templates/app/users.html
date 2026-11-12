@@ -52,6 +52,12 @@
             Todos
         </a>
         <a
+            href="{% url 'app.users'%}?filter=new"
+            class="h-7 cursor-pointer rounded-full text-nowrap flex items-center border px-2 text-sm font-bold {% if filter == 'new' %} bg-green-200 text-green-800 {% else %} text-gray-500 {% endif %}"
+        >
+            Nuevos
+        </a>
+        <a
             href="{% url 'app.users'%}?filter=up_to_date"
             class="h-7 cursor-pointer rounded-full text-nowrap flex items-center border px-2 text-sm font-bold {% if filter == 'up_to_date' %} bg-green-200 text-green-800 {% else %} text-gray-500 {% endif %}"
         >
@@ -84,10 +90,10 @@
         </a>
     </div>
     {% if users|length > 0 %}
-        <span class="text-xs text-gray-500">
-            Total de miembros:
-            <span class="font-semibold text-gray-700">{{ users|length }}</span>
-        </span>
+    <span class="text-xs text-gray-500">
+        Total de miembros:
+        <span class="font-semibold text-gray-700">{{ users|length }}</span>
+    </span>
     {% endif %}
     <div class="flex flex-col gap-2">
         {% for user in users %}

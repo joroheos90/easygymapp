@@ -6,7 +6,7 @@ def _actor(name):
     return f"<b class='capitalize'>{name}</b>"
 
 def _payment_amount(amount):
-    formatted = f"${amount:,.2f}"
+    formatted = f"₡{amount:,.2f}"
     return f"<b>{formatted}</b>"
 
 

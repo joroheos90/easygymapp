@@ -2,7 +2,7 @@
 import logging
 from calendar import monthrange
 from django.utils.timesince import timesince
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, time
 from urllib.parse import urlencode
 
 # Third-party
@@ -15,7 +15,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
 from django.contrib.auth.views import LoginView, PasswordChangeView
 from django.db import transaction, IntegrityError
-from django.db.models import Count, Max, Sum
+from django.db.models import Count, Max, Sum, OuterRef, Subquery, Q
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -95,50 +95,102 @@ def admin(request):
     first_day = today.replace(day=1)
     first_day_next = first_day + relativedelta(months=1)
 
-    active_members = GymUser.objects.filter(gym=request.gym, is_active=True, role="member").count()
+    tz = timezone.get_current_timezone()
 
-    new_members = GymUser.objects.filter(
-        gym=request.gym, 
-        is_active=True, 
-        role="member",
-        join_date__month = today.month,
-        join_date__year = today.year ).count()
-
-
-    total_assist = TimeslotSignup.objects.filter(
-        gym=request.gym,
-        slot_date__year=today.year,
-        slot_date__month=today.month
-    ).count()
-
-    total_hours = DailyTimeslot.objects.filter(
-        gym=request.gym,
-        slot_date__year=today.year,
-        slot_date__month=today.month
-    ).count()
-
-    qs = (
-        Payment.objects
-        .filter(
-            gym=request.gym,
-            paid_at__date__gte=first_day,
-            paid_at__date__lt=first_day_next,
-        )
-        .select_related("user")
-        .order_by("-paid_at", "-id")
+    start = timezone.make_aware(
+        datetime.combine(first_day, time.min), tz
     )
 
-    period_income = qs.aggregate(total=Sum("amount"))["total"] or 0
+    # Hasta mañana, para incluir todo el día de hoy
+    current_end = timezone.make_aware(
+        datetime.combine(today + timedelta(days=1), time.min), tz
+    )
+
+    # Mismo periodo del mes anterior
+    previous_first_day = first_day - relativedelta(months=1)
+    previous_last_day = first_day - timedelta(days=1)
+    previous_days = min(today.day, previous_last_day.day)
+
+    previous_start = timezone.make_aware(
+        datetime.combine(previous_first_day, time.min), tz
+    )
+
+    previous_end = timezone.make_aware(
+        datetime.combine(
+            previous_first_day + timedelta(days=previous_days),
+            time.min
+        ),
+        tz
+    )
+
+    latest_payment = Payment.objects.filter(
+        gym=request.gym,
+        user_id=OuterRef("pk")
+    ).order_by(
+        "-period_end", "-paid_at", "-id"
+    ).values("period_end")[:1]
+
+    members = GymUser.objects.filter(
+        gym=request.gym,
+        role="member",
+        is_active=True
+    ).annotate(
+        last_period_end=Subquery(latest_payment)
+    )
+
+    pending_members = members.filter(
+        Q(last_period_end__lt=today) |
+        Q(last_period_end__isnull=True)
+    ).count()
+
+    pending_amount = pending_members * 10000
+
+    total_members = members.count()
+
+    new_members = GymUser.objects.filter(
+        gym=request.gym,
+        role="member",
+        is_active=True,
+        join_date__year=today.year,
+        join_date__month=today.month
+    ).count()
+
+    period_income = Payment.objects.filter(
+        gym=request.gym,
+        paid_at__gte=start,
+        paid_at__lt=current_end
+    ).aggregate(
+        total=Sum("amount")
+    )["total"] or 0
+
+    previous_income = Payment.objects.filter(
+        gym=request.gym,
+        paid_at__gte=previous_start,
+        paid_at__lt=previous_end
+    ).aggregate(
+        total=Sum("amount")
+    )["total"] or 0
+
+    income_change_percent = (
+        round(
+            ((period_income - previous_income) / previous_income) * 100,
+            1
+        )
+        if previous_income else None
+    )
 
     ctx = {
-        "active_members": active_members,
-        "new_members": new_members,
-        "total_assist": total_assist,
-        "total_hours": total_hours,
-        "period_income": period_income,
+        "gym_name": request.gym.name,
         "period_label": _period_label(today.year, today.month),
-        "gym_name": request.gym.name
+        "period_income": period_income,
+        "previous_income": previous_income,
+        "income_change_percent": income_change_percent,
+        "active_members": total_members,
+        "pending_members": pending_members,
+        "pending_amount": pending_amount,
+        "new_members": new_members,
     }
+
     return render(request, "app/admin.html", ctx)
 
 
@@ -468,9 +520,25 @@ def users(request):
             days_to_due = (pe - today).days
             include = False
             if filt == "overdue":
-                include = (not paid)
+                include = (
+                    not paid
+                    and agg["last_end"] is not None
+                    and days_since_last_cover <= delinquent_days
+                )
+
             elif filt == "delinquent":
-                include = (not paid) and (days_since_last_cover > delinquent_days)
+                include = (
+                    not paid
+                    and agg["last_end"] is not None
+                    and days_since_last_cover > delinquent_days
+                )
+
+            elif filt == "new":
+                include = (
+                    u.join_date.year == today.year
+                    and u.join_date.month == today.month
+                )
+
             elif filt == "up_to_date":
                 include = paid
             elif filt == "due_in_3":

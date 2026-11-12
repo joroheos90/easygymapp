@@ -52,101 +52,52 @@
                 <h2 class="text-xl leading-none font-bold">Estadísticas</h2>
                 <span class="text-xs text-gray-500">{{period_label}}</span>
             </div>
-            <div class="flex w-full flex-row gap-2">
-                <div
-                    class="flex w-1/2 cursor-pointer flex-col gap-1 rounded-[8px] bg-white px-4 py-3 text-base font-normal shadow-sm"
-                >
-                    <span class="text-xs text-gray-500">Miembros Nuevos</span>
-                    <span
-                        class="flex flex-row items-center gap-1 text-2xl font-bold"
-                        >{{new_members}}
-                        <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke-width="1.5"
-                        stroke="currentColor"
-                        class="size-4 text-green-600"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-                        />
-                    </svg>
+            <div class="grid grid-cols-2 gap-2">
+                <a href="{% url 'app.payments'%}?filter=current_month" class="flex flex-col gap-1 rounded-[8px] bg-white px-4 py-3 shadow-sm">
+                    <span class="text-xs text-gray-500">Ingresos del mes</span>
+                    <span class="text-2xl font-bold flex items-center gap-2">
+                        ₡{{period_income|intcomma}} 
+                        {% if income_change_percent > 0 %}
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4 text-green-600">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
+                              </svg>
+                            {% elif income_change_percent < 0 %}
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4 text-red-500">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" />
+                              </svg>
+                              
+                            {% endif %}
                     </span>
-                </div>
-                <div
-                    class="flex w-1/2 cursor-pointer flex-col gap-1 rounded-[8px] bg-white px-4 py-3 text-base font-normal shadow-sm"
-                >
-                    <span class="text-xs text-gray-500">Ingresos</span>
-                    <span
-                        class="flex flex-row items-center gap-1 text-2xl font-bold"
-                        >${{period_income|intcomma}}
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke-width="1.5"
-                            stroke="currentColor"
-                            class="size-4 text-green-600"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-                            />
-                    </svg>
+                    {% if income_change_percent %}
+                        <span class="text-xs {% if income_change_percent > 0 %}text-green-600{% elif income_change_percent < 0 %}text-red-500{% else %}text-gray-400{% endif %}">
+                           {{ income_change_percent|floatformat:0 }}%
+                            vs. mes anterior
+                        </span>
+                    {% endif %}
+                </a>
+    
+                
+    
+                <a href="{% url 'app.users'%}?filter=overdue" class="flex flex-col gap-1 rounded-[8px] bg-white px-4 py-3 shadow-sm">
+                    <span class="text-xs text-gray-500">Pagos pendientes</span>
+                    <span class="text-2xl font-bold">
+                        ₡{{pending_amount|intcomma}}
                     </span>
-                </div>
-            </div>
-            <div class="flex w-full flex-row gap-2">
-                <div
-                    class="flex w-1/2 cursor-pointer flex-col gap-1 rounded-[8px] bg-white px-4 py-3 text-base font-normal shadow-sm"
-                >
-                    <span class="text-xs text-gray-500">Asistencias</span>
-                    <span
-                        class="flex flex-row items-center gap-1 text-2xl font-bold"
-                        >{{total_assist|intcomma}}
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke-width="1.5"
-                            stroke="currentColor"
-                            class="size-4 text-green-600"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-                            />
-                        </svg>
+                </a>
+
+                <a  href="{% url 'app.users'%}?filter=overdue" class="flex flex-col gap-1 rounded-[8px] bg-white px-4 py-3 shadow-sm">
+                    <span class="text-xs text-gray-500">Miembros vencidos</span>
+                    <span class="text-2xl font-bold">
+                        {{ pending_members}}
                     </span>
-                </div>
-                <div
-                    class="flex w-1/2 cursor-pointer flex-col gap-1 rounded-[8px] bg-white px-4 py-3 text-base font-normal shadow-sm"
-                >
-                    <span class="text-xs text-gray-500">Horarios completados</span>
-                    <span
-                        class="flex flex-row items-center gap-1 text-2xl font-bold"
-                        >{{total_hours}}
-                        <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke-width="1.5"
-                        stroke="currentColor"
-                        class="size-4 text-green-600"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-                        />
-                    </svg>
+                </a>
+    
+                <a href="{% url 'app.users'%}?filter=new" class="flex flex-col gap-1 rounded-[8px] bg-white px-4 py-3 shadow-sm">
+                    <span class="text-xs text-gray-500">Miembros nuevos</span>
+                    <span class="text-2xl font-bold">
+                        {{new_members|intcomma}}
                     </span>
-                </div>
+                </a>
             </div>
         </div>
         <div class="w-full grid grid-cols-3 gap-2">
