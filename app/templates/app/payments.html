@@ -72,6 +72,12 @@ class="cursor-pointer text-lg font-normal">
             De 7 dias
         </a>
     </div>
+    {% if payments|length > 0 %}
+        <span class="text-xs text-gray-500">
+            Total de pagos:
+            <span class="font-semibold text-gray-700">{{ payments|length }}</span>
+        </span>
+    {% endif %}
     <div class="flex flex-col gap-2">
         {% for payment in payments %}
         {% if request.is_admin %}
