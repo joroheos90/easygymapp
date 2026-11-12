@@ -1117,7 +1117,7 @@ def payments(request):
         filt = "last_3"
     if filt in {"ultimos_7", "7"}:
         filt = "last_7"
-    if filt in {"mes", "month_current"}:
+    if filt in {"mes", "current_month"}:
         filt = "month"
 
     today = timezone.localdate()

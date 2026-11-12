@@ -83,6 +83,12 @@
             Morosos
         </a>
     </div>
+    {% if users|length > 0 %}
+        <span class="text-xs text-gray-500">
+            Total de miembros:
+            <span class="font-semibold text-gray-700">{{ users|length }}</span>
+        </span>
+    {% endif %}
     <div class="flex flex-col gap-2">
         {% for user in users %}
         <a
