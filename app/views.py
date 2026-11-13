@@ -470,7 +470,7 @@ def users(request):
             out.append({
                 "id": item["id"],
                 "full_name": item["full_name"],
-                "next_payment_date": format_es_date(item["period_end"]),
+                "next_payment_date": format_es_date(item["covered_until"]),
                 "paid_current_period": item["paid"],
                 "expired_on": (
                     format_es_date(item["expired_on"])
