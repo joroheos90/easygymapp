@@ -983,34 +983,41 @@ class MemberPaymentStatus:
     def _calculate_status(self, member, payments):
         today = self.today
 
-        period_start, period_end = current_period_for(
-            member,
-            ref=today,
-        )
+        period_start, period_end = current_period_for(member, ref=today)
 
-        # Check whether a payment covers the entire current period
         paid = any(
             start <= period_start and end >= period_end
             for start, end in payments
         )
 
-        # Find the most recent paid period ending
-        # on or before the current period starts.
+        # Calcular hasta qué fecha tiene períodos cubiertos consecutivamente.
+        covered_until = period_start
+
+        for start, end in sorted(payments):
+            if end <= covered_until:
+                continue
+
+            if start <= covered_until:
+                covered_until = max(covered_until, end)
+            else:
+                break
+
+        paid = covered_until >= period_end
+
+        # Comprobar si también tiene pagado el siguiente período.
+        next_period_end = current_period_for(member, ref=period_end)[1]
+
+        paid_next_period = covered_until >= next_period_end
+
         previous_ends = [
-            end
-            for start, end in payments
+            end for start, end in payments
             if end <= period_start
         ]
 
         last_end = max(previous_ends) if previous_ends else None
-
-        # If there are no previous payments, start from join_date.
         reference_date = last_end or member.join_date
 
-        days_overdue = max(
-            0,
-            (today - reference_date).days,
-        )
+        days_overdue = max(0, (today - reference_date).days)
 
         is_new = (
             member.join_date.year == today.year
@@ -1024,17 +1031,6 @@ class MemberPaymentStatus:
         else:
             status = self.DELINQUENT
 
-        next_period_start = period_end
-        next_period_end = current_period_for(
-            member,
-            ref=period_end,
-        )[1]
-
-        paid_next_period = any(
-            start <= next_period_start and end >= next_period_end
-            for start, end in payments
-        )
-
         return {
             "id": member.id,
             "user": member,
@@ -1043,13 +1039,14 @@ class MemberPaymentStatus:
             "is_new": is_new,
             "paid": paid,
             "paid_current_period": paid,
+            "paid_next_period": paid_next_period,
             "period_start": period_start,
             "period_end": period_end,
             "last_end": last_end,
+            "covered_until": covered_until,
             "days_overdue": days_overdue,
-            "days_to_due": (period_end - today).days,
+            "days_to_due": (covered_until - today).days if paid else None,
             "expired_on": reference_date if not paid else None,
-            "paid_next_period": paid_next_period,
         }
 
     def get_status(self, member):
@@ -1106,8 +1103,7 @@ class MemberPaymentStatus:
             item
             for item in self.status_by_user.values()
             if (
-                not item["paid"]
-                and not item["paid_next_period"]
+                item["paid"]
                 and 1 <= item["days_to_due"] <= days
             )
         ]
