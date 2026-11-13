@@ -1024,6 +1024,17 @@ class MemberPaymentStatus:
         else:
             status = self.DELINQUENT
 
+        next_period_start = period_end
+        next_period_end = current_period_for(
+            member,
+            ref=period_end,
+        )[1]
+
+        paid_next_period = any(
+            start <= next_period_start and end >= next_period_end
+            for start, end in payments
+        )
+
         return {
             "id": member.id,
             "user": member,
@@ -1038,6 +1049,7 @@ class MemberPaymentStatus:
             "days_overdue": days_overdue,
             "days_to_due": (period_end - today).days,
             "expired_on": reference_date if not paid else None,
+            "paid_next_period": paid_next_period,
         }
 
     def get_status(self, member):
@@ -1091,9 +1103,13 @@ class MemberPaymentStatus:
 
     def get_due_in(self, days):
         return [
-            data
-            for data in self.status_by_user.values()
-            if 0 <= data["days_to_due"] <= days
+            item
+            for item in self.status_by_user.values()
+            if (
+                not item["paid"]
+                and not item["paid_next_period"]
+                and 1 <= item["days_to_due"] <= days
+            )
         ]
 
     def summary(self):

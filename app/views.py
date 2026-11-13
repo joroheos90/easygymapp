@@ -528,9 +528,30 @@ def profile(request):
 
 
     ps, pe = current_period_for(user)
-    has_paid = Payment.objects.filter(
-        gym=request.gym, user=user, period_start__lte=ps, period_end__gte=pe
-    ).exists()
+
+    payment_periods = list(
+        Payment.objects.filter(
+            gym=request.gym,
+            user=user,
+        ).values_list("period_start", "period_end")
+    )
+
+    # Buscar hasta dónde está cubierto desde el período actual.
+    covered_until = ps
+
+    for start, end in sorted(payment_periods):
+        if end <= covered_until:
+            continue
+
+        if start <= covered_until:
+            covered_until = max(covered_until, end)
+        else:
+            break
+
+    has_paid = covered_until > ps
+
+    # Última fecha cubierta consecutivamente.
+    next_payment_date = covered_until if has_paid else pe
 
     last_payment = (
             Payment.objects
@@ -554,11 +575,13 @@ def profile(request):
         }
 
     expired_on = None
+
     if not has_paid:
-        if last_payment:
-            expired_on = last_payment.period_end
-        else:
-            expired_on = ps
+        previous_ends = [
+            end for start, end in payment_periods
+            if end <= ps
+        ]
+        expired_on = max(previous_ends) if previous_ends else ps
 
     ctx = {
         "user": {
@@ -566,7 +589,7 @@ def profile(request):
             "full_name": user.full_name,
             "phone": getattr(user, "phone", None),
             "expired_on": format_es_date(expired_on, include_year=True) if expired_on else "",
-            "next_payment_date": format_es_date(pe),
+            "next_payment_date": format_es_date(next_payment_date),
             "has_paid": has_paid,
             "join_date": format_es_date(user.join_date, include_year=True),
             "birth_date": format_es_date(user.birth_date, include_year=True),
