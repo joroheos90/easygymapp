@@ -51,19 +51,6 @@ def safe_replace(year: int, month: int, day: int) -> date:
     last_day = calendar.monthrange(year, month)[1]
     return date(year, month, min(day, last_day))
 
-def current_period_for(user: GymUser, ref: Optional[date] = None) -> Tuple[date, date]:
-    today = ref or date.today()
-    base_day = user.join_date.day
-
-    if today.day < base_day:
-        prev_month = today.replace(day=1) - relativedelta(months=1)
-        start = safe_replace(prev_month.year, prev_month.month, base_day)
-    else:
-        start = safe_replace(today.year, today.month, base_day)
-
-    end = start + relativedelta(months=1)
-    return start, end
-
 
 # ---------- Read models (DTOs) ----------
 @dataclass(frozen=True)
@@ -907,3 +894,213 @@ class TimeslotService:
                 "group_date": self.slot.slot_date.strftime("%d/%m/%Y"),
             },
         )
+
+
+class MemberPaymentStatus:
+
+    OVERDUE = "overdue"
+    DELINQUENT = "delinquent"
+    UP_TO_DATE = "up_to_date"
+    NEW = "new"
+    ALL = "all"
+
+    STATUSES = (
+        OVERDUE,
+        DELINQUENT,
+        UP_TO_DATE,
+        NEW,
+        ALL,
+    )
+
+    def __init__(
+        self,
+        gym,
+        delinquent_days=30,
+        today=None,
+        search=None,
+    ):
+        self.gym = gym
+        self.today = today or timezone.localdate()
+        self.delinquent_days = delinquent_days
+
+        # 1. Load active members
+        members_qs = GymUser.objects.filter(
+            gym=gym,
+            role=GymUser.Role.MEMBER,
+            is_active=True,
+        ).only(
+            "id",
+            "full_name",
+            "join_date",
+        ).order_by("full_name")
+
+        if search:
+            members_qs = members_qs.filter(
+                full_name__icontains=search
+            )
+
+        self.members = list(members_qs)
+
+        member_ids = [member.id for member in self.members]
+
+        # 2. Load all payment periods in one query
+        payments_by_user = {}
+
+        if member_ids:
+            payments = (
+                Payment.objects
+                .filter(
+                    gym=gym,
+                    user_id__in=member_ids,
+                )
+                .values(
+                    "user_id",
+                    "period_start",
+                    "period_end",
+                )
+                .order_by("user_id", "period_end")
+            )
+
+            for payment in payments:
+                payments_by_user.setdefault(
+                    payment["user_id"], []
+                ).append((
+                    payment["period_start"],
+                    payment["period_end"],
+                ))
+
+        # 3. Calculate each member only once
+        self.status_by_user = {}
+
+        for member in self.members:
+            self.status_by_user[member.id] = (
+                self._calculate_status(
+                    member,
+                    payments_by_user.get(member.id, []),
+                )
+            )
+
+    def _calculate_status(self, member, payments):
+        today = self.today
+
+        period_start, period_end = current_period_for(
+            member,
+            ref=today,
+        )
+
+        # Check whether a payment covers the entire current period
+        paid = any(
+            start <= period_start and end >= period_end
+            for start, end in payments
+        )
+
+        # Find the most recent paid period ending
+        # on or before the current period starts.
+        previous_ends = [
+            end
+            for start, end in payments
+            if end <= period_start
+        ]
+
+        last_end = max(previous_ends) if previous_ends else None
+
+        # If there are no previous payments, start from join_date.
+        reference_date = last_end or member.join_date
+
+        days_overdue = max(
+            0,
+            (today - reference_date).days,
+        )
+
+        is_new = (
+            member.join_date.year == today.year
+            and member.join_date.month == today.month
+        )
+
+        if paid:
+            status = self.UP_TO_DATE
+        elif days_overdue <= self.delinquent_days:
+            status = self.OVERDUE
+        else:
+            status = self.DELINQUENT
+
+        return {
+            "id": member.id,
+            "user": member,
+            "full_name": member.full_name,
+            "status": status,
+            "is_new": is_new,
+            "paid": paid,
+            "paid_current_period": paid,
+            "period_start": period_start,
+            "period_end": period_end,
+            "last_end": last_end,
+            "days_overdue": days_overdue,
+            "days_to_due": (period_end - today).days,
+            "expired_on": reference_date if not paid else None,
+        }
+
+    def get_status(self, member):
+        user_id = (
+            member.id
+            if isinstance(member, GymUser)
+            else member
+        )
+
+        return self.status_by_user.get(user_id)
+
+    def get_members(self, status=ALL):
+        if status not in self.STATUSES:
+            raise ValueError(f"Unknown member status: {status}")
+
+        if status == self.ALL:
+            return list(self.status_by_user.values())
+
+        if status == self.NEW:
+            return [
+                data
+                for data in self.status_by_user.values()
+                if data["is_new"]
+            ]
+
+        return [
+            data
+            for data in self.status_by_user.values()
+            if data["status"] == status
+        ]
+
+    def count(self, status=ALL):
+        if status == self.ALL:
+            return len(self.status_by_user)
+
+        if status not in self.STATUSES:
+            raise ValueError(f"Unknown member status: {status}")
+
+        if status == self.NEW:
+            return sum(
+                1
+                for data in self.status_by_user.values()
+                if data["is_new"]
+            )
+
+        return sum(
+            1
+            for data in self.status_by_user.values()
+            if data["status"] == status
+        )
+
+    def get_due_in(self, days):
+        return [
+            data
+            for data in self.status_by_user.values()
+            if 0 <= data["days_to_due"] <= days
+        ]
+
+    def summary(self):
+        return {
+            "total": self.count(self.ALL),
+            "overdue": self.count(self.OVERDUE),
+            "delinquent": self.count(self.DELINQUENT),
+            "up_to_date": self.count(self.UP_TO_DATE),
+            "new": self.count(self.NEW),
+        }

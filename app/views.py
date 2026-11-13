@@ -24,7 +24,7 @@ from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods
 
 # Local
-from app.services import GymService, BodyMetricsService, TimeslotService
+from app.services import GymService, BodyMetricsService, TimeslotService, MemberPaymentStatus
 from .helpers import format_es_date, gym_required, role_required, signed_at_parts, slot_start_dt, current_period_for
 from .models import BaseTimeslot, DailyTimeslot, Gym, GymUser, Payment, TimeslotSignup, ActivityLog, MeasurementDefinition, MeasurementRecord, MeasurementValue
 from .activity.helpers import log_activity
@@ -93,7 +93,6 @@ def admin(request):
     today = timezone.localdate()
 
     first_day = today.replace(day=1)
-    first_day_next = first_day + relativedelta(months=1)
 
     tz = timezone.get_current_timezone()
 
@@ -123,37 +122,15 @@ def admin(request):
         tz
     )
 
-    latest_payment = Payment.objects.filter(
-        gym=request.gym,
-        user_id=OuterRef("pk")
-    ).order_by(
-        "-period_end", "-paid_at", "-id"
-    ).values("period_end")[:1]
+    # Estado de pagos de los miembros
+    payment_status = MemberPaymentStatus(request.gym)
+    stats = payment_status.summary()
 
-    members = GymUser.objects.filter(
-        gym=request.gym,
-        role="member",
-        is_active=True
-    ).annotate(
-        last_period_end=Subquery(latest_payment)
-    )
-
-    pending_members = members.filter(
-        Q(last_period_end__lt=today) |
-        Q(last_period_end__isnull=True)
-    ).count()
-
+    pending_members = stats["overdue"]
     pending_amount = pending_members * 10000
 
-    total_members = members.count()
-
-    new_members = GymUser.objects.filter(
-        gym=request.gym,
-        role="member",
-        is_active=True,
-        join_date__year=today.year,
-        join_date__month=today.month
-    ).count()
+    total_members = stats["total"]
+    new_members = stats["new"]
 
     period_income = Payment.objects.filter(
         gym=request.gym,
@@ -181,7 +158,7 @@ def admin(request):
 
     ctx = {
         "gym_name": request.gym.name,
-        "period_label": _period_label(today.year, today.month),
+        "period_label": f"{MONTHS_ES[today.month - 1][:3]} {today.year}",
         "period_income": period_income,
         "previous_income": previous_income,
         "income_change_percent": income_change_percent,
@@ -468,95 +445,38 @@ def staff(request):
         },
     )
 
-
 @login_required
 @role_required(["admin"])
 @gym_required
 def users(request):
     filt = (request.GET.get("filter") or "all").strip().lower()
-    days_param = request.GET.get("days") or "30"
     search = (request.GET.get("search") or "").strip()
 
     try:
-        delinquent_days = int(days_param)
-
-        today = timezone.localdate()
-        qs = (
-            GymUser.objects
-            .filter(gym=request.gym, is_active=True, role="member")
-            .only("id", "full_name", "join_date")
-            .order_by("full_name")
+        payment_status = MemberPaymentStatus(
+            request.gym,
+            search=search
         )
 
-        if search:
-            qs = qs.filter(full_name__icontains=search)
-
         out = []
-        for u in qs:
-            ps, pe = current_period_for(u, ref=today)
-            paid = Payment.objects.filter(
-                gym=request.gym,
-                user=u,
-                period_start__lte=ps,
-                period_end__gte=pe
-            ).exists()
 
-            agg = Payment.objects.filter(gym=request.gym, user=u).aggregate(last_end=Max("period_end"))
-            last_end = agg["last_end"]
-            if last_end:
-                last_covered_day = last_end - timedelta(days=1)
-                days_since_last_cover = (today - last_covered_day).days
-            else:
-                days_since_last_cover = 10**9
+        if filt in ("due_in_3", "due_in_7"):
+            days = 3 if filt == "due_in_3" else 7
+            members = payment_status.get_due_in(days)
+        else:
+            members = payment_status.get_members(filt)
 
-            if not paid:
-                if agg["last_end"]:
-                    expired_on = agg["last_end"]
-                else:
-                    expired_on = ps
-            else:
-                expired_on = None
-
-            days_to_due = (pe - today).days
-            include = False
-            if filt == "overdue":
-                include = (
-                    not paid
-                    and agg["last_end"] is not None
-                    and days_since_last_cover <= delinquent_days
-                )
-
-            elif filt == "delinquent":
-                include = (
-                    not paid
-                    and agg["last_end"] is not None
-                    and days_since_last_cover > delinquent_days
-                )
-
-            elif filt == "new":
-                include = (
-                    u.join_date.year == today.year
-                    and u.join_date.month == today.month
-                )
-
-            elif filt == "up_to_date":
-                include = paid
-            elif filt == "due_in_3":
-                include = (1 <= days_to_due <= 3)
-            elif filt == "due_in_7":
-                include = (1 <= days_to_due <= 7)
-            else:  # "all" (or any other value)
-                include = True
-
-            if include:
-                _, de = current_period_for(u)
-                out.append({
-                    "id": u.id,
-                    "full_name": u.full_name,
-                    "next_payment_date": format_es_date(de),
-                    "paid_current_period": paid,
-                    "expired_on": format_es_date(expired_on) if expired_on else "",
-                })
+        for item in members:
+            out.append({
+                "id": item["id"],
+                "full_name": item["full_name"],
+                "next_payment_date": format_es_date(item["period_end"]),
+                "paid_current_period": item["paid"],
+                "expired_on": (
+                    format_es_date(item["expired_on"])
+                    if item["expired_on"] else ""
+                ),
+            })
 
         return render(
             request,
@@ -565,15 +485,18 @@ def users(request):
                 "users": out,
                 "filter": filt,
                 "search": search,
-                "gym_name": request.gym.name
+                "gym_name": request.gym.name,
             },
         )
 
     except Exception as e:
-        logger.exception("Error in users view (filter=%s, search=%s): %s", filt, search, e)
+        logger.exception(
+            "Error in users view (filter=%s, search=%s): %s",
+            filt,
+            search,
+            e
+        )
         raise
-
-
 
 @login_required
 @gym_required
@@ -626,7 +549,7 @@ def profile(request):
             "period_paid_label": (
                 last_payment.period_label
                 if getattr(last_payment, "period_label", None)
-                else _period_label(last_payment.period_start.year, last_payment.period_start.month)
+                else _period_label(last_payment.period_start, last_payment.period_end)
             ),
         }
 
@@ -980,8 +903,11 @@ def _period_bounds_by_anchor(year: int, month: int, anchor_day: int) -> tuple[da
     pe = _clamp_dom(ny, nm, anchor_day)  # exclusivo
     return ps, pe
 
-def _period_label(year: int, month: int) -> str:
-    return f"{MONTHS_ES[month-1]} {year}"
+def _period_label(period_start: date, period_end: date) -> str:
+    return (
+        f"{period_start.day} {MONTHS_ES[period_start.month - 1][:3]} al "
+        f"{period_end.day} {MONTHS_ES[period_end.month - 1][:3]}"
+    )
 
 def _parse_amount(raw: str) -> int:
     """Quita separadores y devuelve entero en unidades (colones)."""
@@ -990,16 +916,27 @@ def _parse_amount(raw: str) -> int:
     digits = "".join(ch for ch in str(raw) if ch.isdigit())
     return int(digits or 0)
 
-def _period_options(n: int = 6) -> list[tuple[str, str]]:
-    """Meses desde el actual hacia adelante: value='YYYY-MM', label='Mes-YYYY'."""
-    date = timezone.localdate()
-    today = date - timedelta(weeks=8)
+def _period_options(join_date: date, n: int = 6) -> list[tuple[str, str]]:
+    """Períodos desde dos meses atrás hasta adelante."""
+    today = timezone.localdate() - timedelta(weeks=8)
     y, m = today.year, today.month
+    anchor_day = join_date.day
+
     out = []
+
     for i in range(n):
         yy = y + (m + i - 1) // 12
         mm = (m + i - 1) % 12 + 1
-        out.append((f"{yy:04d}-{mm:02d}", _period_label(yy, mm)))
+
+        period_start, period_end = _period_bounds_by_anchor(
+            yy, mm, anchor_day
+        )
+
+        out.append((
+            f"{yy:04d}-{mm:02d}",
+            _period_label(period_start, period_end)
+        ))
+
     return out
 
 
@@ -1071,7 +1008,7 @@ def payment(request):
         # Ancla por día de alta del usuario (si no tiene, usa día 1)
         anchor_day = user.join_date.day if getattr(user, "join_date", None) else 1
         period_start, period_end = _period_bounds_by_anchor(py, pm, anchor_day)
-        period_label = _period_label(py, pm)
+        period_label = _period_label(period_start, period_end)
 
         # --- guardar ---
         if is_edit:
@@ -1123,39 +1060,42 @@ def payment(request):
     ctx = _pago_context(request.gym, is_edit, pagoid, payment, pref_user_id)
     return render(request, "app/payment.html", ctx)
 
-
 def _pago_context(gym, is_edit: bool, pagoid: str | None, payment: Payment | None, pref_user_id: str | None = None):
     """Contexto común para el template."""
-    users = GymUser.objects.filter(gym=gym, is_active=True).only("id", "full_name").order_by("full_name")
-    methods = METHOD_CHOICES
-    periods = _period_options(4)
+
+    user_id = payment.user_id if payment else pref_user_id
+
+    user = get_object_or_404(
+        GymUser.objects.filter(gym=gym, is_active=True),
+        pk=user_id
+    )
+
+    periods = _period_options(user.join_date, 4)
 
     initial = {}
+
     if payment:
-        # Prellenar para edición (periodo en YYYY-MM)
         ps = payment.period_start
         initial = {
-            "user_id": payment.user_id,
+            "user_id": user.id,
             "amount": payment.amount,
             "method": payment.method,
             "paid_at": payment.paid_at.date().isoformat() if hasattr(payment.paid_at, "isoformat") else "",
             "period": f"{ps.year:04d}-{ps.month:02d}",
             "notes": payment.notes or "",
         }
-    else:                                 # ← NUEVO
-        try:
-            if pref_user_id:
-                initial["user_id"] = int(pref_user_id)
-            initial["paid_at"] = timezone.localdate().isoformat() 
-        except ValueError:
-            pass
+    else:
+        initial = {
+            "user_id": user.id,
+            "paid_at": timezone.localdate().isoformat(),
+        }
 
     return {
         "is_edit": is_edit,
-        "user_id": pref_user_id,
+        "user_id": user.id,
         "payment_id": pagoid,
-        "users": users,
-        "methods": methods,
+        "users": [user],
+        "methods": METHOD_CHOICES,
         "periods": periods,
         "initial": initial,
     }
