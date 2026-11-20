@@ -12,6 +12,8 @@ class Gym(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+    measurement_ai_usage = models.PositiveIntegerField(default=0)
+    measurement_ai_reset_at = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = "gyms"
@@ -241,6 +243,14 @@ class MeasurementDefinition(models.Model):
 
     id = models.BigAutoField(primary_key=True)
 
+    gym = models.ForeignKey(
+        Gym,
+        on_delete=models.CASCADE,
+        related_name="measurement_definitions",
+        null=True,
+        blank=True
+    )
+
     name = models.CharField(max_length=80)
 
     unit_type = models.CharField(
@@ -255,7 +265,6 @@ class MeasurementDefinition(models.Model):
     code = models.CharField(
         max_length=40,
         choices=MeasurementCode.choices,
-        unique=True,
         null=True,
         blank=True
     )
@@ -266,9 +275,16 @@ class MeasurementDefinition(models.Model):
 
     class Meta:
         db_table = "measurement_definitions"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["gym", "code"],
+                name="uniq_measurement_definition_gym_code",
+            ),
+        ]
         indexes = [
             models.Index(fields=["is_active"]),
             models.Index(fields=["unit_type"]),
+            models.Index(fields=["gym", "is_active"]),
         ]
 
     def __str__(self):

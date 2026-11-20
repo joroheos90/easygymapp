@@ -53,6 +53,25 @@
             />
         </div>
 
+        <!-- CODE -->
+        <div class="flex flex-col rounded-[8px] bg-white px-4">
+            <select
+                name="code"
+                class="w-full py-3 text-base font-normal ring-0 focus:ring-0 focus:outline-none"
+            >
+                <option value="">Tipo de medición (opcional)</option>
+
+                {% for val,label in codes %}
+                <option
+                    value="{{ val }}"
+                    {% if definition.code == val %}selected{% endif %}
+                >
+                    {{ label }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
         <!-- UNIDAD -->
         <div class="flex flex-col rounded-[8px] bg-white px-4">
             <select

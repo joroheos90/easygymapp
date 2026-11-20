@@ -1,3 +1,4 @@
+
 {% extends "app/base.html" %}
 {% load customfilters %}
 
@@ -16,7 +17,9 @@
     </svg>
 </a>
 {% if request.is_admin %}
-<button form="measurement-form" class="text-blue-500 font-bold">Guardar</button>
+<button form="measurement-form" class="text-blue-500 font-bold">
+    Guardar
+</button>
 {% endif %}
 {% endblock %}
 
@@ -31,6 +34,7 @@
     {% if is_edit and request.is_admin %}
         <input type="hidden" name="recordid" value="{{ record.id }}">
     {% endif %}
+
     <input type="hidden" name="userid" value="{{ user_id }}">
 
     {% if error %}
@@ -54,19 +58,21 @@
         <h3 class="text-sm font-bold text-gray-500 uppercase">
             Mediciones principales
         </h3>
+
         {% for d in primary_definitions %}
         <div class="flex justify-between border-b border-gray-300">
             <span class="text-sm font-bold uppercase text-gray-600">
                 {{ d.name }}{% if d.is_required %}*{% endif %}
             </span>
+
             <div class="flex items-center gap-2">
                 <input
                     type="text"
                     name="def_{{ d.id }}"
-                    value="{{ initial|get_item:d.name }}"
+                    value="{{ initial|get_item:d.name|default:'' }}"
                     {% if not request.is_admin %}disabled{% endif %}
                     data-unit-type="{{ d.unit_type }}"
-                    inputmode="{% if d.unit_type != 'text' %}decimal{% endif %}"
+                    inputmode="{% if d.unit_type != 'text' %}decimal{% else %}text{% endif %}"
                     class="measurement-input w-24 text-right text-base ring-0 focus:ring-0 focus:outline-none"
                 />
                 <span class="text-xs text-gray-500">{{ d.unit_type }}</span>
@@ -75,27 +81,46 @@
         {% endfor %}
     </div>
 
+    {% if secondary_definitions %}
     <div class="rounded-[24px] bg-white p-4 flex flex-col gap-4">
         <h3 class="text-sm font-bold text-gray-500 uppercase">
             Otras mediciones
         </h3>
+
         {% for d in secondary_definitions %}
         <div class="flex justify-between border-b border-gray-200">
-            <span class="text-sm capitalize text-gray-600">{{ d.name }}</span>
+            <span class="text-sm capitalize text-gray-600">
+                {{ d.name }}
+            </span>
+
             <div class="flex items-center gap-2">
                 <input
                     type="text"
                     name="def_{{ d.id }}"
-                    value="{{ initial|get_item:d.name }}"
+                    value="{{ initial|get_item:d.name|default:'' }}"
                     {% if not request.is_admin %}disabled{% endif %}
                     data-unit-type="{{ d.unit_type }}"
-                    inputmode="{% if d.unit_type != 'text' %}decimal{% endif %}"
+                    inputmode="{% if d.unit_type != 'text' %}decimal{% else %}text{% endif %}"
                     class="measurement-input w-24 text-right text-base ring-0 focus:ring-0 focus:outline-none"
                 />
                 <span class="text-xs text-gray-500">{{ d.unit_type }}</span>
             </div>
         </div>
         {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="rounded-[12px] bg-white p-4">
+        <label class="block text-sm font-bold text-gray-500 mb-2">
+            Notas
+        </label>
+        <textarea
+            name="notes"
+            rows="3"
+            {% if not request.is_admin %}disabled{% endif %}
+            class="w-full text-sm ring-0 focus:ring-0 focus:outline-none resize-none"
+            placeholder="Notas adicionales..."
+        >{{ record.notes|default:'' }}</textarea>
     </div>
 
     {% if is_edit and request.is_admin %}
@@ -112,73 +137,66 @@
     </div>
     {% endif %}
 </form>
+
 {% if request.is_admin %}
 <script>
-    document.addEventListener("DOMContentLoaded", () => {
-    
-        const inputs = document.querySelectorAll(".measurement-input");
-    
-        const onlyNumbers = (v) => v.replace(/[^\d.]/g, "");
-        const onlyIntegers = (v) => v.replace(/[^\d]/g, "");
-    
-        inputs.forEach(input => {
-            const type = input.dataset.unitType;
-    
-            if (type === "text") return;
-    
-            input.addEventListener("input", () => {
-                let v = input.value;
-    
-                switch (type) {
-    
-                    case "kg":
-                        // decimal, máx 2 decimales
-                        v = onlyNumbers(v);
-                        if (v.includes(".")) {
-                            const [a, b] = v.split(".");
-                            v = a + "." + b.slice(0, 2);
-                        }
-                        break;
-    
-                    case "cm":
-                        // entero positivo
-                        v = onlyIntegers(v);
-                        break;
-    
-                    case "%":
-                        // decimal 0–100
-                        v = onlyNumbers(v);
-                        if (v.includes(".")) {
-                            const [a, b] = v.split(".");
-                            v = a + "." + b.slice(0, 1);
-                        }
-                        const n = parseFloat(v);
-                        if (!isNaN(n)) {
-                            if (n > 100) v = "100";
-                            if (n < 0) v = "0";
-                        }
-                        break;
-    
-                    case "#":
-                        // decimal libre
-                        v = onlyNumbers(v);
-                        break;
-                }
-    
-                input.value = v;
-            });
-        });
-    
-        // Limpieza final antes de enviar (evita "12.")
-        const form = document.getElementById("measurement-form");
-        form.addEventListener("submit", () => {
-            inputs.forEach(input => {
-                if (input.value.endsWith(".")) {
-                    input.value = input.value.slice(0, -1);
-                }
-            });
+document.addEventListener("DOMContentLoaded", () => {
+    const inputs = document.querySelectorAll(".measurement-input");
+
+    const onlyNumbers = v => v.replace(/[^\d.]/g, "");
+    const onlyIntegers = v => v.replace(/[^\d]/g, "");
+
+    inputs.forEach(input => {
+        const type = input.dataset.unitType;
+
+        if (type === "text") return;
+
+        input.addEventListener("input", () => {
+            let v = input.value;
+
+            switch (type) {
+                case "kg":
+                    v = onlyNumbers(v);
+                    if (v.includes(".")) {
+                        const [a, ...rest] = v.split(".");
+                        v = a + "." + rest.join("").slice(0, 2);
+                    }
+                    break;
+
+                case "cm":
+                    v = onlyIntegers(v);
+                    break;
+
+                case "%":
+                    v = onlyNumbers(v);
+                    if (v.includes(".")) {
+                        const [a, ...rest] = v.split(".");
+                        v = a + "." + rest.join("").slice(0, 1);
+                    }
+
+                    const n = parseFloat(v);
+                    if (!isNaN(n) && n > 100) v = "100";
+                    break;
+
+                case "#":
+                    v = onlyNumbers(v);
+                    break;
+            }
+
+            input.value = v;
         });
     });
-    </script>
+
+    const form = document.getElementById("measurement-form");
+
+    form.addEventListener("submit", () => {
+        inputs.forEach(input => {
+            if (input.value.endsWith(".")) {
+                input.value = input.value.slice(0, -1);
+            }
+        });
+    });
+});
+</script>
 {% endif %}
 {% endblock %}

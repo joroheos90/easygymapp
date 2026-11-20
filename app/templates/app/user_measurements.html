@@ -22,7 +22,7 @@
 </a>
 {% if request.is_admin %}
 <a
-    href="{% url 'app.user_measurement' %}?userid={{user.id}}"
+    href="{% url 'app.measurement_import' %}?userid={{user.id}}"
     class="cursor-pointer text-lg font-bold text-blue-500"
 >
     Agregar

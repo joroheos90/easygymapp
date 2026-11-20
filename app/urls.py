@@ -16,6 +16,7 @@ urlpatterns = [
     path("measurements", views.measurements, name="app.measurements"),
     path("measurement", views.measurement_form, name="app.measurement"),
     path("user-measurement", views.user_measurement, name="app.user_measurement"),
+    path("user-measurement-image", views.measurement_import, name="app.measurement_import"),
 
 
     #members

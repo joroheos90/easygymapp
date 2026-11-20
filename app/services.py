@@ -26,6 +26,22 @@ from .activity.helpers import log_activity
 from .activity.event_types import ActivityEventType
 from .helpers import slot_start_dt, current_period_for
 
+import json
+from decimal import Decimal, InvalidOperation
+
+from django.conf import settings
+from django.db.models import Q
+from django.core.exceptions import ImproperlyConfigured
+
+from google import genai
+from google.genai import types
+
+from PIL import Image, UnidentifiedImageError
+from io import BytesIO
+
+from app.models import MeasurementDefinition
+
+
 
 
 # ---------- Domain errors ----------
@@ -1116,3 +1132,236 @@ class MemberPaymentStatus:
             "up_to_date": self.count(self.UP_TO_DATE),
             "new": self.count(self.NEW),
         }
+
+
+
+def get_gym_measurements(gym):
+    """
+    Returns the active definitions available to a gym.
+
+    Gym-specific definitions override global definitions
+    with the same code.
+    """
+
+    gym_definitions = list(
+        MeasurementDefinition.objects.filter(
+            gym=gym,
+            is_active=True,
+        )
+    )
+
+    return gym_definitions
+
+
+def extract_measurements_from_image(image, gym):
+
+    if not settings.GEMINI_API_KEY:
+        raise ImproperlyConfigured(
+            "GEMINI_API_KEY is not configured."
+        )
+
+    definitions = get_gym_measurements(gym)
+
+    if not definitions:
+        raise ValueError(
+            "No measurement definitions available."
+        )
+
+    # Prepare the definitions sent to Gemini.
+    available_measurements = [
+        {
+            "id": definition.id,
+            "name": definition.name,
+            "code": definition.code,
+            "unit": definition.unit_type,
+        }
+        for definition in definitions
+    ]
+
+    allowed_ids = {
+        definition.id
+        for definition in definitions
+    }
+
+    # Read image bytes.
+    image_bytes = image.read()
+
+    # Verify the actual image format.
+    try:
+        img = Image.open(BytesIO(image_bytes))
+        img.verify()
+
+        image_format = img.format
+
+    except (UnidentifiedImageError, OSError):
+        raise ValueError("Invalid image.")
+
+    mime_types = {
+        "JPEG": "image/jpeg",
+        "PNG": "image/png",
+        "WEBP": "image/webp",
+    }
+
+    mime_type = mime_types.get(image_format)
+
+    if not mime_type:
+        raise ValueError("Unsupported image format.")
+
+    prompt = f"""
+You are an expert body composition measurement
+extraction system.
+
+Analyze the attached screenshot from a body composition
+scale application.
+
+Your task is to identify the measurements visible in
+the screenshot and match them to the gym definitions
+provided below.
+
+AVAILABLE GYM MEASUREMENTS:
+
+{json.dumps(available_measurements, ensure_ascii=False)}
+
+RULES:
+
+1. Only extract measurements clearly visible in the image.
+
+2. Match measurements based on their actual meaning,
+   not just similar names.
+
+3. Use the exact definition ID provided in the catalog.
+
+4. Never invent values or definition IDs.
+
+5. Do not confuse:
+   - Fat mass with body fat percentage.
+   - Muscle mass with skeletal muscle mass.
+   - Lean mass with muscle mass.
+   - Water percentage with water mass.
+   - BMI with body fat percentage.
+
+6. Only match measurements with compatible units.
+
+7. Do not calculate missing measurements.
+
+8. Preserve the numeric value exactly as displayed.
+   Do not round or modify decimal precision.
+
+9. If a measurement cannot be confidently matched
+   to an available definition, omit it.
+
+10. A screenshot may contain more measurements than
+    the gym has configured. Ignore those extra fields.
+
+11. Return each definition ID at most once.
+
+12. Do not include explanations or markdown.
+
+Return JSON with this structure:
+
+{{
+    "measurements": [
+        {{
+            "definition_id": 1,
+            "source_label": "Weight",
+            "value": "82.5",
+            "source_unit": "kg"
+        }}
+    ]
+}}
+"""
+
+    client = genai.Client(
+        api_key=settings.GEMINI_API_KEY
+    )
+
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=[
+            prompt,
+            types.Part.from_bytes(
+                data=image_bytes,
+                mime_type=mime_type
+            ),
+        ],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_json_schema={
+                "type": "OBJECT",
+                "properties": {
+                    "measurements": {
+                        "type": "ARRAY",
+                        "items": {
+                            "type": "OBJECT",
+                            "properties": {
+                                "definition_id": {
+                                    "type": "INTEGER"
+                                },
+                                "source_label": {
+                                    "type": "STRING"
+                                },
+                                "value": {
+                                    "type": "STRING"
+                                },
+                                "source_unit": {
+                                    "type": "STRING"
+                                },
+                            },
+                            "required": [
+                                "definition_id",
+                                "source_label",
+                                "value",
+                                "source_unit",
+                            ],
+                        },
+                    }
+                },
+                "required": ["measurements"],
+            },
+        ),
+    )
+
+    if not response.text:
+        raise ValueError(
+            "Gemini returned an empty response."
+        )
+
+    data = json.loads(response.text)
+
+    extracted = []
+    seen_ids = set()
+
+    for item in data.get("measurements", []):
+
+        definition_id = item.get("definition_id")
+
+        # Never trust IDs returned by the AI.
+        if definition_id not in allowed_ids:
+            continue
+
+        if definition_id in seen_ids:
+            continue
+
+        value = str(item.get("value", "")).strip()
+
+        if not value or len(value) > 64:
+            continue
+
+        # Validate that the value is numeric.
+        try:
+            Decimal(value.replace(",", "."))
+        except InvalidOperation:
+            continue
+
+        seen_ids.add(definition_id)
+
+        extracted.append({
+            "definition_id": definition_id,
+            "value": value,
+            "source_label": item.get("source_label", ""),
+            "source_unit": item.get("source_unit", ""),
+        })
+
+    return {
+        "measurements": extracted
+    }
