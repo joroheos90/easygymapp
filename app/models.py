@@ -226,20 +226,44 @@ class MeasurementDefinition(models.Model):
         NUMBER = "#", "Número"
 
     class MeasurementCode(models.TextChoices):
+        # Básicas
         WEIGHT = "weight", "Peso"
+        BMI = "bmi", "Índice de masa corporal"
+
+        # Grasa corporal
+        BODY_FAT_PERCENT = "body_fat_percent", "Grasa corporal (%)"
+        FAT_MASS = "fat_mass", "Masa grasa (kg)"
+        VISCERAL_FAT = "visceral_fat", "Grasa visceral"
+        OBESITY_LEVEL = "obesity_level", "Grado de obesidad (%)"
+
+        # Músculos
+        MUSCLE_PERCENT = "muscle_percent", "Masa muscular (%)"
+        MUSCLE_MASS = "muscle_mass", "Masa muscular (kg)"
+        LEAN_MASS = "lean_mass", "Masa magra (kg)"
+
+        # Agua corporal
+        WATER_PERCENT = "water_percent", "Agua corporal (%)"
+        WATER_MASS = "water_mass", "Agua corporal (kg)"
+
+        # Otros componentes corporales
+        BONE_MASS = "bone_mass", "Masa ósea (kg)"
+        PROTEIN_PERCENT = "protein_percent", "Proteína (%)"
+
+        # Metabolismo
+        BMR = "bmr", "Metabolismo basal (kcal)"
+        METABOLIC_AGE = "metabolic_age", "Edad metabólica (años)"
+
+        # Circunferencias
         WAIST = "waist", "Cintura"
         HIP = "hip", "Cadera"
         NECK = "neck", "Cuello"
-        BODY_FAT_PERCENT = "body_fat_percent", "Grasa corporal"
-        FAT_MASS = "fat_mass", "Masa grasa"
-        LEAN_MASS = "lean_mass", "Masa magra"
-        MUSCLE_MASS = "muscle_mass", "Masa muscular"
-        BMI = "bmi", "Índice de masa corporal"
+
+        # Índices calculados
         WHR = "whr", "Relación cintura-cadera"
         WHTR = "whtr", "Relación cintura-estatura"
-        BMR = "bmr", "Tasa metabólica basal"
+
+        # Gasto energético
         TDEE = "tdee", "Gasto energético diario total"
-        WATER_PERCENT = "water_percent", "Porcentaje de agua corporal"
 
     id = models.BigAutoField(primary_key=True)
 
